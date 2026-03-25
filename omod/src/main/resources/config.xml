@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<module configVersion="1.2">
+	
+	<!-- Base Module Properties -->
+	<id>${project.parent.artifactId}</id>
+	<name>${project.parent.name}</name>
+	<version>${project.parent.version}</version>
+	<package>org.openmrs.module.reportbuilder</package>
+	<author>lubwamasamuel</author>
+	<description>
+			${project.parent.description}
+	</description>
+
+	<activator>org.openmrs.module.reportbuilder.ReportBuilderActivator</activator>
+	
+	<!-- <updateURL>https://modules.openmrs.org/modules/download/@MODULE_ID@/update.rdf</updateURL> -->
+	<!-- /Base Module Properties -->
+	
+	<require_version>${openmrsPlatformVersion}</require_version>
+	
+	<!-- Extensions -->
+	<require_modules>
+		<require_module>
+			org.openmrs.module.reporting
+		</require_module>
+		<require_module>
+			org.openmrs.module.serialization.xstream
+		</require_module>
+		<require_module>
+			org.openmrs.module.legacyui
+		</require_module>
+		<require_module>
+			org.openmrs.module.reportingcompatibility
+		</require_module>
+		<require_module>
+			org.openmrs.module.webservices.rest
+		</require_module>
+	</require_modules>
+
+	<aware_of_modules>
+		<aware_of_module>org.openmrs.module.legacyui</aware_of_module>
+	</aware_of_modules>
+
+	<globalProperty>
+		<property>reportbuilder.reports.directory</property>
+		<defaultValue>configuration/reportbuilder</defaultValue>
+		<description>
+			The path to the working directory of the report builder
+		</description>
+	</globalProperty>
+
+	<globalProperty>
+		<!-- Serializer whitelist global property -->
+		<property>${project.parent.artifactId}.serializer.whitelist.types</property>
+
+		<!-- Comma-separated list of fully qualified classes that XStream should be allowed to deserialize -->
+		<defaultValue>
+			org.openmrs.module.reportbuilder.**
+		</defaultValue>
+
+		<description>
+			Whitelist reportbuilder classes for XStream deserialization (TRUNK-6188)
+		</description>
+	</globalProperty>
+	
+	<!--
+	<dwr>
+		<allow>
+			<create creator="new" javascript="DWRFormEntryService">
+				<param name="class" value="org.openmrs.module.@MODULE_ID@.web.DWRFormEntryService"/>
+				<include method="enterForm"/>
+			</create>
+		</allow>
+
+		<signatures>
+			<![CDATA[
+			import @MODULE_PACKAGE@.web.DWRFormEntryService;
+			DWRFormEntryService.enterForm(Integer patientId, Integer formId, boolean useEncounter, List<String> fields);
+			]]>
+		</signatures>	
+	</dwr>
+	-->
+	
+	<!-- Servlets -->
+	<!-- Accessed through the url /pageContext()/moduleServlet/<moduleId>/<servlet-name> 
+	<servlet>
+		<servlet-name>formDownload</servlet-name>
+		<servlet-class>@MODULE_PACKAGE@.web.FormDownloadServlet</servlet-class>
+	</servlet>
+	-->
+	<!-- /Servlets -->
+	
+	
+	<!-- Internationalization -->
+	<!-- All message codes should start with @MODULE_ID@.* -->
+	<messages>
+		<lang>en</lang>
+		<file>messages.properties</file>
+	</messages>
+	<messages>
+		<lang>fr</lang>
+		<file>messages_fr.properties</file>
+	</messages>
+	<messages>
+		<lang>es</lang>
+		<file>messages_es.properties</file>
+	</messages>
+	<!-- /Internationalization -->
+	
+</module>
+

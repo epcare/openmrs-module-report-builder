@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns="http://www.springframework.org/schema/beans"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
+
+    <bean id="reportbuilder.HibernateReportBuilderDAO"
+          class="org.openmrs.module.reportbuilder.api.db.hibernate.HibernateReportBuilderDAO">
+        <property name="sessionFactory" ref="dbSessionFactory" />
+    </bean>
+
+    <bean id="reportbuilder.ReportBuilderService"
+          class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
+        <property name="transactionManager" ref="transactionManager" />
+        <property name="target">
+            <bean class="org.openmrs.module.reportbuilder.api.impl.ReportBuilderServiceImpl">
+                <property name="dao" ref="reportbuilder.HibernateReportBuilderDAO" />
+            </bean>
+        </property>
+        <property name="preInterceptors" ref="serviceInterceptors" />
+        <property name="transactionAttributeSource" ref="transactionAttributeSource" />
+    </bean>
+
+    <bean parent="serviceContext">
+        <property name="moduleService">
+            <list>
+                <value>org.openmrs.module.reportbuilder.api.ReportBuilderService</value>
+                <ref bean="reportbuilder.ReportBuilderService" />
+            </list>
+        </property>
+    </bean>
+</beans>
