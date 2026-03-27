@@ -53,22 +53,17 @@ public class ReportBuilderSectionResource extends DelegatingCrudResource<ReportB
 	}
 	
 	@Override
-    public PageableResult doGetAll(RequestContext context) throws ResponseException {
-
-        String q = context.getParameter("q");
-        boolean includeRetired = Boolean.parseBoolean(
-                context.getParameter("includeRetired") != null ? context.getParameter("includeRetired") : "false"
-        );
-
-        List<ReportBuilderSection> results = service().getReportBuilderSections(
-                q,
-                includeRetired,
-                context.getStartIndex(),
-                context.getLimit()
-        );
-
-        return new NeedsPaging<>(results, context);
-    }
+	public PageableResult doGetAll(RequestContext context) throws ResponseException {
+		
+		String q = context.getParameter("q");
+		boolean includeRetired = Boolean.parseBoolean(context.getParameter("includeRetired") != null ? context
+		        .getParameter("includeRetired") : "false");
+		
+		List<ReportBuilderSection> results = service().getReportBuilderSections(q, includeRetired, context.getStartIndex(),
+		    context.getLimit());
+		
+		return new NeedsPaging<>(results, context);
+	}
 	
 	@Override
 	protected PageableResult doSearch(RequestContext context) throws ResponseException {

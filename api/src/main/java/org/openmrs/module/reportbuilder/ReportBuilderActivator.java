@@ -9,8 +9,8 @@
  */
 package org.openmrs.module.reportbuilder;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.openmrs.module.BaseModuleActivator;
 
 /**
@@ -18,7 +18,7 @@ import org.openmrs.module.BaseModuleActivator;
  */
 public class ReportBuilderActivator extends BaseModuleActivator {
 	
-	private Log log = LogFactory.getLog(this.getClass());
+	private static final Logger log = LoggerFactory.getLogger(ReportBuilderActivator.class);
 	
 	/**
 	 * @see #started()

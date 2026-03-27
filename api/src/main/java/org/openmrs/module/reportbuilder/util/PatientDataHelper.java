@@ -1,15 +1,15 @@
 package org.openmrs.module.reportbuilder.util;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.openmrs.module.reporting.dataset.DataSetColumn;
 import org.openmrs.module.reporting.dataset.DataSetRow;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  */
 public class PatientDataHelper {
 	
-	protected Log log = LogFactory.getLog(this.getClass());
+	private static final Logger log = LoggerFactory.getLogger(PatientDataHelper.class);
 	
 	public void addCol(DataSetRow row, String label, Object value) {
 		if (value == null) {

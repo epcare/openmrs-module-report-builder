@@ -1,5 +1,8 @@
 package org.openmrs.module.reportbuilder.web.resource;
 
+import java.util.Collections;
+import java.util.Map;
+
 import org.openmrs.api.context.Context;
 import org.openmrs.module.reportbuilder.api.ReportBuilderService;
 import org.openmrs.module.reportbuilder.dto.SqlPreviewResult;
@@ -13,13 +16,10 @@ import org.openmrs.module.webservices.rest.web.resource.impl.DelegatingCrudResou
 import org.openmrs.module.webservices.rest.web.resource.impl.DelegatingResourceDescription;
 import org.openmrs.module.webservices.rest.web.response.ResponseException;
 
-import java.util.Collections;
-
 /**
- * Controller-less SQL preview endpoint using RESTWS resource pattern.
- * <p>
- * POST /ws/rest/v1/reportbuilder/sqlpreview Body: { sql, params, maxRows } Response: same object +
- * { columns, rows, rowCount, truncated }
+ * Controller-less SQL preview endpoint using RESTWS resource pattern. POST
+ * /ws/rest/v1/reportbuilder/sqlpreview Body: { sql, params, maxRows } Response: same object + {
+ * columns, rows, rowCount, truncated }
  */
 @Resource(name = RestConstants.VERSION_1 + "/reportbuilder/sqlpreview", supportedClass = SqlPreviewRequest.class, supportedOpenmrsVersions = {
         "2.*", "3.*" })
@@ -36,13 +36,13 @@ public class SqlPreviewResource extends DelegatingCrudResource<SqlPreviewRequest
 	
 	@Override
 	public SqlPreviewRequest save(SqlPreviewRequest delegate) {
-		// privilege gate here (recommended)
-		Context.requirePrivilege("View Reports"); // replace with your module privilege if you have one
+		Context.requirePrivilege("View Reports");
 		
-		SqlPreviewResult r = service().previewSql(decodeHtmlEntities(delegate.getSql()),
-		    delegate.getParams() != null ? delegate.getParams() : Collections.emptyMap(), delegate.getMaxRows());
+		Map<String, Object> params = delegate.getParams() != null ? delegate.getParams() : Collections
+		        .<String, Object> emptyMap();
 		
-		// populate response fields on the same delegate
+		SqlPreviewResult r = service().previewSql(decodeHtmlEntities(delegate.getSql()), params, delegate.getMaxRows());
+		
 		delegate.setColumns(r.getColumns());
 		delegate.setRows(r.getRows());
 		delegate.setRowCount(r.getRowCount());
@@ -53,7 +53,6 @@ public class SqlPreviewResource extends DelegatingCrudResource<SqlPreviewRequest
 	
 	@Override
 	public SqlPreviewRequest getByUniqueId(String uniqueId) {
-		// not a persistent resource
 		return null;
 	}
 	
@@ -69,20 +68,16 @@ public class SqlPreviewResource extends DelegatingCrudResource<SqlPreviewRequest
 	
 	@Override
 	public PageableResult doGetAll(RequestContext context) throws ResponseException {
-		// No GET-all for this action resource
 		return null;
 	}
 	
 	@Override
 	protected PageableResult doSearch(RequestContext context) throws ResponseException {
-		// Not used. We rely on POST -> save(delegate)
 		return null;
 	}
 	
 	@Override
 	public DelegatingResourceDescription getRepresentationDescription(Representation rep) {
-		
-		// Return response fields
 		DelegatingResourceDescription d = new DelegatingResourceDescription();
 		d.addProperty("sql");
 		d.addProperty("params");
@@ -91,7 +86,6 @@ public class SqlPreviewResource extends DelegatingCrudResource<SqlPreviewRequest
 		d.addProperty("rows");
 		d.addProperty("rowCount");
 		d.addProperty("truncated");
-		
 		return d;
 	}
 	
@@ -110,21 +104,15 @@ public class SqlPreviewResource extends DelegatingCrudResource<SqlPreviewRequest
 	}
 	
 	private static String decodeHtmlEntities(String s) {
-		if (s == null)
+		if (s == null) {
 			return null;
+		}
 		
-		// common HTML escaping
 		String out = s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
 		        .replace("&#39;", "'");
 		
-		// handle >= and <= that come as &gt;= / &lt;=
 		out = out.replace("&gt;=", ">=").replace("&lt;=", "<=");
-		
-		// handle “greater-than-or-equal” HTML entity that becomes ≥
-		// (some sanitisers use &gte; or &ge;)
 		out = out.replace("&gte;", ">=").replace("&ge;", ">=");
-		
-		// same for ≤
 		out = out.replace("&lte;", "<=").replace("&le;", "<=");
 		
 		return out;

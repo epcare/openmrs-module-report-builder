@@ -19,13 +19,21 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.reportbuilder.api.ReportBuilderService;
 import org.openmrs.module.reportbuilder.api.db.ReportBuilderDAO;
-import org.openmrs.module.reportbuilder.util.data.definition.AggregateDataSetDefinition;
 import org.openmrs.module.reportbuilder.dto.SqlPreviewResult;
-import org.openmrs.module.reportbuilder.model.*;
+import org.openmrs.module.reportbuilder.model.ETLSource;
+import org.openmrs.module.reportbuilder.model.ReportBuilderAgeCategory;
+import org.openmrs.module.reportbuilder.model.ReportBuilderAgeGroup;
+import org.openmrs.module.reportbuilder.model.ReportBuilderDataTheme;
+import org.openmrs.module.reportbuilder.model.ReportBuilderIndicator;
+import org.openmrs.module.reportbuilder.model.ReportBuilderReport;
+import org.openmrs.module.reportbuilder.model.ReportBuilderSection;
+import org.openmrs.module.reportbuilder.model.ReportCategory;
+import org.openmrs.module.reportbuilder.model.ReportLibrary;
 import org.openmrs.module.reportbuilder.util.IndicatorSqlSync;
 import org.openmrs.module.reportbuilder.util.IndicatorValidator;
 import org.openmrs.module.reportbuilder.util.ReportDesignFileUtil;
 import org.openmrs.module.reportbuilder.util.ReportDesignHtmlRenderer;
+import org.openmrs.module.reportbuilder.util.data.definition.AggregateDataSetDefinition;
 import org.openmrs.module.reporting.common.DateUtil;
 import org.openmrs.module.reporting.common.MessageUtil;
 import org.openmrs.module.reporting.common.ObjectUtil;
@@ -48,10 +56,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class ReportBuilderServiceImpl extends BaseOpenmrsService implements ReportBuilderService {
 	
@@ -59,9 +76,6 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	
 	UserService userService;
 	
-	/**
-	 * Injected in moduleApplicationContext.xml
-	 */
 	public void setDao(ReportBuilderDAO dao) {
 		this.dao = dao;
 	}
@@ -87,7 +101,6 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	        Map<String, Object> flatValues, String remapJsonOptional) {
 		String templateJson = readDesignResource(reportDesign);
 		Map<String, Object> values = flatValues == null ? Collections.<String, Object> emptyMap() : flatValues;
-		
 		return reportDesignHtmlRenderer.convert(templateJson, values, remapJsonOptional).payloadJson;
 	}
 	
@@ -100,15 +113,17 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		Map<String, DataSet> dataSets = reportData.getDataSets();
 		for (String dsName : dataSets.keySet()) {
 			DataSet ds = dataSets.get(dsName);
-			if (ds == null)
+			if (ds == null) {
 				continue;
+			}
 			
 			Iterator it = ds.iterator();
 			while (it.hasNext()) {
 				DataSetRow row = (DataSetRow) it.next();
 				Map<String, Object> cols = row.getColumnValuesByKey();
-				if (cols == null || cols.isEmpty())
+				if (cols == null || cols.isEmpty()) {
 					continue;
+				}
 				
 				String code = firstString(cols, "code", "dataelement", "dataElement", "data_element");
 				String age = firstString(cols, "age", "agegroup", "age_group");
@@ -123,8 +138,9 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 				for (Map.Entry<String, Object> e : cols.entrySet()) {
 					String k = e.getKey();
 					Object v = e.getValue();
-					if (k == null)
+					if (k == null) {
 						continue;
+					}
 					
 					if (looksLikeKey(k) && v != null && isNumeric(v)) {
 						out.put(k.trim(), v);
@@ -139,21 +155,25 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	private boolean looksLikeKey(String k) {
 		String s = k.trim();
 		int a = s.indexOf('_');
-		if (a <= 0)
+		if (a <= 0) {
 			return false;
+		}
 		int b = s.indexOf('_', a + 1);
-		if (b <= a + 1)
+		if (b <= a + 1) {
 			return false;
+		}
 		int c = s.lastIndexOf('_');
 		return c > b && c < s.length() - 1;
 	}
 	
 	private boolean isNumeric(Object v) {
-		if (v instanceof Number)
+		if (v instanceof Number) {
 			return true;
+		}
 		String s = String.valueOf(v).trim();
-		if (s.length() == 0)
+		if (s.length() == 0) {
 			return false;
+		}
 		try {
 			Double.parseDouble(s);
 			return true;
@@ -169,7 +189,9 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	}
 	
 	private Object firstObject(Map<String, Object> cols, String... keys) {
-		for (String k : keys) {
+		int i;
+		for (i = 0; i < keys.length; i++) {
+			String k = keys[i];
 			if (cols.containsKey(k)) {
 				Object v = cols.get(k);
 				if (v != null && String.valueOf(v).trim().length() > 0) {
@@ -192,7 +214,6 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			
 			String rendered = fillTemplateWithReportData(templateContents, reportData, reportDesign);
 			return removeQuotesFromValues(rendered);
-			
 		}
 		catch (Exception e) {
 			throw new RuntimeException("Failed legacy payload build", e);
@@ -201,7 +222,6 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	
 	private String fillTemplateWithReportData(String templateContents, ReportData reportData, ReportDesign reportDesign)
 	        throws IOException, RenderingException {
-		
 		try {
 			TextTemplateRenderer renderer = new TextTemplateRenderer();
 			Map<String, Object> replacements = renderer.getBaseReplacementData(reportData, reportDesign);
@@ -225,7 +245,6 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			
 			Object evaluated = EvaluationUtil.evaluateExpression(templateContents, replacements, prefix, suffix);
 			return evaluated == null ? "" : evaluated.toString();
-			
 		}
 		catch (RenderingException re) {
 			throw re;
@@ -289,18 +308,24 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	}
 	
 	private String getYearAndQuarter(Date date) {
-		if (date == null)
+		if (date == null) {
 			return null;
-		java.time.LocalDate localDate = date.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
-		int year = localDate.getYear();
-		int month = localDate.getMonthValue();
-		int quarter = (month - 1) / 3 + 1;
+		}
+		
+		Calendar calendar = Calendar.getInstance();
+		calendar.setTime(date);
+		
+		int year = calendar.get(Calendar.YEAR);
+		int month = calendar.get(Calendar.MONTH) + 1;
+		int quarter = ((month - 1) / 3) + 1;
+		
 		return year + "Q" + quarter;
 	}
 	
 	private String appendPeriod(String payloadJson, String period) {
-		if (payloadJson == null)
+		if (payloadJson == null) {
 			return null;
+		}
 		try {
 			ObjectMapper om = new ObjectMapper();
 			ObjectNode root = (ObjectNode) om.readTree(payloadJson);
@@ -513,7 +538,6 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	@Override
 	@Transactional(readOnly = true)
 	public List<String> getETLTables() {
-		;
 		return dao.getETLTables(getAllowedTablePrefixes());
 	}
 	
@@ -569,7 +593,12 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	
 	@Override
 	public void purgeAgeCategory(ReportBuilderAgeCategory category) {
-		dao.purgeAgeCategory(category);
+		
+	}
+	
+	@Override
+	public void purgeAgeGroup(ReportBuilderAgeGroup group) {
+		dao.purgeAgeGroup(group);
 	}
 	
 	@Override
@@ -593,11 +622,6 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	@Transactional(readOnly = true)
 	public List<ReportBuilderAgeGroup> getAgeGroupsByCategoryCode(String categoryCode, Boolean activeOnly) {
 		return dao.getAgeGroupsByCategoryCode(categoryCode, activeOnly);
-	}
-	
-	@Override
-	public void purgeAgeGroup(ReportBuilderAgeGroup group) {
-		dao.purgeAgeGroup(group);
 	}
 	
 	@Override
@@ -643,88 +667,105 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	@Override
 	public CompiledReportArtifacts compileReport(String reportBuilderReportUuid) {
 		ReportDefinitionService reportDefinitionService = Context.getService(ReportDefinitionService.class);
-
+		
 		ReportBuilderReport report = getReportBuilderReportByUuid(reportBuilderReportUuid);
 		if (report == null) {
 			throw new IllegalArgumentException("ReportBuilderReport not found: " + reportBuilderReportUuid);
 		}
-
+		
 		report.setCompileStatus(ReportBuilderReport.ReportCompileStatus.COMPILING);
 		saveReportBuilderReport(report);
-
+		
 		try {
 			JsonNode reportConfig = parseJson(report.getConfigJson(), "Invalid ReportBuilderReport configJson");
-
+			
 			JsonNode definitionNode = reportConfig.path("definition");
 			JsonNode designNode = reportConfig.path("design");
-
+			
 			JsonNode sections = definitionNode.path("sections");
 			if (!sections.isArray()) {
 				sections = reportConfig.path("sections");
 			}
-
+			
 			ArrayNode compiledFields = objectMapper.createArrayNode();
 			ArrayNode compiledDhis2Rows = objectMapper.createArrayNode();
-
+			
 			if (sections.isArray()) {
 				List<JsonNode> sectionRefs = new ArrayList<JsonNode>();
-				for (JsonNode s : sections) {
+				Iterator<JsonNode> sectionIterator = sections.elements();
+				while (sectionIterator.hasNext()) {
+					JsonNode s = sectionIterator.next();
 					if (s.path("enabled").asBoolean(true)) {
 						sectionRefs.add(s);
 					}
 				}
-
-				sectionRefs.sort(Comparator.comparingInt(a -> a.path("sortOrder").asInt(9999)));
-
-				for (JsonNode sectionRef : sectionRefs) {
+				
+				Collections.sort(sectionRefs, new Comparator<JsonNode>() {
+					
+					@Override
+					public int compare(JsonNode a, JsonNode b) {
+						Integer s1 = Integer.valueOf(a.path("sortOrder").asInt(9999));
+						Integer s2 = Integer.valueOf(b.path("sortOrder").asInt(9999));
+						return s1.compareTo(s2);
+					}
+				});
+				
+				int i;
+				for (i = 0; i < sectionRefs.size(); i++) {
+					JsonNode sectionRef = sectionRefs.get(i);
 					String sectionUuid = sectionRef.path("sectionUuid").asText(null);
 					if (sectionUuid == null || sectionUuid.trim().isEmpty()) {
 						continue;
 					}
-
+					
 					ReportBuilderSection section = getReportBuilderSectionByUuid(sectionUuid);
 					if (section == null) {
 						continue;
 					}
-
-					JsonNode sectionConfig = parseJson(section.getConfigJson(), "Invalid section configJson for " + sectionUuid);
-
+					
+					JsonNode sectionConfig = parseJson(section.getConfigJson(), "Invalid section configJson for "
+					        + sectionUuid);
+					
 					String sectionName = sectionRef.path("titleOverride").asText(null);
 					if (sectionName == null || sectionName.trim().isEmpty()) {
 						sectionName = section.getName();
 					}
-
+					
 					ArrayNode sectionFields = compileSectionToReportFields(sectionName, sectionConfig);
-					for (JsonNode f : sectionFields) {
-						compiledFields.add(f);
+					Iterator<JsonNode> fieldIterator = sectionFields.elements();
+					while (fieldIterator.hasNext()) {
+						compiledFields.add(fieldIterator.next());
 					}
-
+					
 					appendSectionDhis2Mappings(compiledDhis2Rows, sectionConfig);
 				}
 			}
-
+			
 			ObjectNode compiledDefinitionRoot = objectMapper.createObjectNode();
 			compiledDefinitionRoot.put("version", 1);
 			compiledDefinitionRoot.put("name", report.getName());
 			compiledDefinitionRoot.put("code", report.getCode());
 			compiledDefinitionRoot.set("report_fields", compiledFields);
-
+			
 			String compiledDefinitionJson;
 			try {
-				compiledDefinitionJson = objectMapper.writerWithDefaultPrettyPrinter()
-						.writeValueAsString(compiledDefinitionRoot);
-			} catch (Exception e) {
+				compiledDefinitionJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(
+				    compiledDefinitionRoot);
+			}
+			catch (Exception e) {
 				throw new RuntimeException("Failed to serialize compiled report definition JSON", e);
 			}
-
+			
 			String definitionFileName = buildDefinitionFileName(report);
 			File definitionFile;
 			try {
-				definitionFile = ReportDesignFileUtil.writeJsonStringToDesignFile(definitionFileName, compiledDefinitionJson);
-			} catch (Exception e) {
+				definitionFile = ReportDesignFileUtil
+				        .writeJsonStringToDesignFile(definitionFileName, compiledDefinitionJson);
+			}
+			catch (Exception e) {
 				throw new RuntimeException("Failed to write compiled report definition file", e);
 			}
-
+			
 			ArrayNode compiledDesignGroups;
 			JsonNode authoredGroups = designNode.path("groups");
 			if (authoredGroups.isArray() && authoredGroups.size() > 0) {
@@ -732,7 +773,7 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			} else {
 				compiledDesignGroups = compileGeneratedDesignGroupsFromSections(sections, designNode);
 			}
-
+			
 			ObjectNode compiledDesignRoot = objectMapper.createObjectNode();
 			compiledDesignRoot.put("version", 1);
 			compiledDesignRoot.put("name", report.getName());
@@ -742,58 +783,59 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			compiledDesignRoot.put("defaultValue", designNode.path("defaultValue").asInt(0));
 			compiledDesignRoot.set("groups", compiledDesignGroups);
 			compiledDesignRoot.set("dimensions", compileDimensionsFromDesignAndSections(designNode, sections));
-
+			
 			ObjectNode compiledDhis2 = objectMapper.createObjectNode();
 			compiledDhis2.put("enabled", compiledDhis2Rows.size() > 0);
 			compiledDhis2.set("rows", compiledDhis2Rows);
 			compiledDesignRoot.set("dhis2", compiledDhis2);
-
+			
 			String compiledDesignJson;
 			try {
-				compiledDesignJson = objectMapper.writerWithDefaultPrettyPrinter()
-						.writeValueAsString(compiledDesignRoot);
-			} catch (Exception e) {
+				compiledDesignJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(compiledDesignRoot);
+			}
+			catch (Exception e) {
 				throw new RuntimeException("Failed to serialize compiled report design JSON", e);
 			}
-
+			
 			ReportDefinition reportDefinition = findOrCreateReportDefinition(report, reportDefinitionService);
-
+			
 			AggregateDataSetDefinition dsd = new AggregateDataSetDefinition();
 			dsd.setName(report.getName() + " Data Set");
 			dsd.setDescription(report.getDescription());
 			dsd.setReportDesign(definitionFile);
 			dsd.addParameter(new Parameter("startDate", "Start Date", Date.class));
 			dsd.addParameter(new Parameter("endDate", "End Date", Date.class));
-
+			
 			reportDefinition.setName(report.getName());
 			reportDefinition.setDescription(report.getDescription());
 			reportDefinition.getParameters().clear();
 			reportDefinition.addParameter(new Parameter("startDate", "Start Date", Date.class));
 			reportDefinition.addParameter(new Parameter("endDate", "End Date", Date.class));
 			reportDefinition.getDataSetDefinitions().clear();
-
+			
 			Map<String, Object> parameterMappings = new HashMap<String, Object>();
 			parameterMappings.put("startDate", "${startDate}");
 			parameterMappings.put("endDate", "${endDate}");
-
+			
 			reportDefinition.addDataSetDefinition("defaultDataSet", dsd, parameterMappings);
 			reportDefinition = reportDefinitionService.saveDefinition(reportDefinition);
-
+			
 			ReportDesign jsonDesign = saveOrUpdateJsonReportDesign(reportDefinition, compiledDesignJson, report);
-
+			
 			report.setCompiledReportDefinitionUuid(reportDefinition.getUuid());
 			report.setCompiledReportDesignUuid(jsonDesign != null ? jsonDesign.getUuid() : null);
 			report.setLastCompiledAt(new Date());
 			report.setCompileStatus(ReportBuilderReport.ReportCompileStatus.COMPILED);
 			report = saveReportBuilderReport(report);
-
+			
 			CompiledReportArtifacts out = new CompiledReportArtifacts();
 			out.setReportBuilderReport(report);
 			out.setReportDefinition(reportDefinition);
 			out.setReportDesignFile(definitionFile);
 			out.setCompiledJson(compiledDefinitionJson);
 			return out;
-		} catch (Exception e) {
+		}
+		catch (Exception e) {
 			report.setLastCompiledAt(new Date());
 			report.setCompileStatus(ReportBuilderReport.ReportCompileStatus.FAILED);
 			saveReportBuilderReport(report);
@@ -805,7 +847,9 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		ArrayNode out = objectMapper.createArrayNode();
 		Map<String, ObjectNode> sectionMeta = buildSectionDimensionMetadata(sections);
 		
-		for (JsonNode groupNode : authoredGroups) {
+		Iterator<JsonNode> groupIterator = authoredGroups.elements();
+		while (groupIterator.hasNext()) {
+			JsonNode groupNode = groupIterator.next();
 			ObjectNode group = objectMapper.createObjectNode();
 			group.put("title", groupNode.path("title").asText(""));
 			
@@ -819,7 +863,9 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			JsonNode rows = groupNode.path("rows");
 			
 			if (rows.isArray()) {
-				for (JsonNode rowNode : rows) {
+				Iterator<JsonNode> rowIterator = rows.elements();
+				while (rowIterator.hasNext()) {
+					JsonNode rowNode = rowIterator.next();
 					ObjectNode row = objectMapper.createObjectNode();
 					
 					String type = rowNode.path("type").asText("indicator");
@@ -905,39 +951,52 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		if (!sections.isArray()) {
 			return out;
 		}
-
+		
 		List<JsonNode> sectionRefs = new ArrayList<JsonNode>();
-		for (JsonNode s : sections) {
+		Iterator<JsonNode> sectionIterator = sections.elements();
+		while (sectionIterator.hasNext()) {
+			JsonNode s = sectionIterator.next();
 			if (s.path("enabled").asBoolean(true)) {
 				sectionRefs.add(s);
 			}
 		}
-		sectionRefs.sort(Comparator.comparingInt(a -> a.path("sortOrder").asInt(9999)));
-
-		for (JsonNode sectionRef : sectionRefs) {
+		
+		Collections.sort(sectionRefs, new Comparator<JsonNode>() {
+			
+			@Override
+			public int compare(JsonNode a, JsonNode b) {
+				Integer s1 = Integer.valueOf(a.path("sortOrder").asInt(9999));
+				Integer s2 = Integer.valueOf(b.path("sortOrder").asInt(9999));
+				return s1.compareTo(s2);
+			}
+		});
+		
+		int i;
+		for (i = 0; i < sectionRefs.size(); i++) {
+			JsonNode sectionRef = sectionRefs.get(i);
 			String sectionUuid = sectionRef.path("sectionUuid").asText(null);
 			if (sectionUuid == null || sectionUuid.trim().isEmpty()) {
 				continue;
 			}
-
+			
 			ReportBuilderSection section = getReportBuilderSectionByUuid(sectionUuid);
 			if (section == null) {
 				continue;
 			}
-
+			
 			JsonNode sectionConfig = parseJson(section.getConfigJson(), "Invalid section configJson for " + sectionUuid);
-
+			
 			String sectionName = sectionRef.path("titleOverride").asText(null);
 			if (sectionName == null || sectionName.trim().isEmpty()) {
 				sectionName = section.getName();
 			}
-
+			
 			ObjectNode group = compileSectionToDesignGroup(sectionName, sectionConfig, designNode);
 			if (group != null) {
 				out.add(group);
 			}
 		}
-
+		
 		return out;
 	}
 	
@@ -967,7 +1026,9 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		}
 		
 		if (sections.isArray()) {
-			for (JsonNode sectionRef : sections) {
+			Iterator<JsonNode> sectionIterator = sections.elements();
+			while (sectionIterator.hasNext()) {
+				JsonNode sectionRef = sectionIterator.next();
 				String sectionUuid = sectionRef.path("sectionUuid").asText(null);
 				if (sectionUuid == null || sectionUuid.trim().isEmpty()) {
 					continue;
@@ -995,35 +1056,53 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	
 	private ArrayNode compileAgeDimension(String ageCategoryCode) {
 		ArrayNode out = objectMapper.createArrayNode();
-
+		
 		ReportBuilderAgeCategory category = getAgeCategoryByCode(ageCategoryCode);
 		if (category == null || category.getAgeGroups() == null) {
 			return out;
 		}
-
+		
 		List<ReportBuilderAgeGroup> groups = new ArrayList<ReportBuilderAgeGroup>(category.getAgeGroups());
-		groups.sort(Comparator.comparingInt(g -> g.getSortOrder() == null ? Integer.MAX_VALUE : g.getSortOrder()));
-
-		for (ReportBuilderAgeGroup g : groups) {
+		Collections.sort(groups, new Comparator<ReportBuilderAgeGroup>() {
+			
+			@Override
+			public int compare(ReportBuilderAgeGroup g1, ReportBuilderAgeGroup g2) {
+				Integer s1 = g1.getSortOrder();
+				Integer s2 = g2.getSortOrder();
+				
+				if (s1 == null) {
+					s1 = Integer.valueOf(Integer.MAX_VALUE);
+				}
+				if (s2 == null) {
+					s2 = Integer.valueOf(Integer.MAX_VALUE);
+				}
+				
+				return s1.compareTo(s2);
+			}
+		});
+		
+		int i;
+		for (i = 0; i < groups.size(); i++) {
+			ReportBuilderAgeGroup g = groups.get(i);
 			if (g == null || !Boolean.TRUE.equals(g.getActive()) || g.getLabel() == null || g.getLabel().trim().isEmpty()) {
 				continue;
 			}
-
+			
 			ObjectNode one = objectMapper.createObjectNode();
 			one.put("id", sanitize(g.getLabel()));
 			one.put("label", g.getLabel());
 			out.add(one);
 		}
-
+		
 		return out;
 	}
 	
 	private ObjectNode compileSectionToDesignGroup(String sectionName, JsonNode sectionConfig, JsonNode reportDesignNode) {
 		ObjectNode group = objectMapper.createObjectNode();
 		group.put("title", sectionName);
-
+		
 		ArrayNode rows = objectMapper.createArrayNode();
-
+		
 		ObjectNode sectionRow = objectMapper.createObjectNode();
 		sectionRow.put("type", "section-label");
 		sectionRow.put("label", sectionName);
@@ -1033,16 +1112,28 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		sectionRow.put("showTotal", false);
 		sectionRow.put("showDisaggregation", false);
 		rows.add(sectionRow);
-
+		
 		JsonNode indicators = sectionConfig.path("indicators");
 		if (indicators.isArray()) {
 			List<JsonNode> sorted = new ArrayList<JsonNode>();
-			for (JsonNode ind : indicators) {
-				sorted.add(ind);
+			Iterator<JsonNode> indicatorIterator = indicators.elements();
+			while (indicatorIterator.hasNext()) {
+				sorted.add(indicatorIterator.next());
 			}
-			sorted.sort(Comparator.comparingInt(a -> a.path("sortOrder").asInt(9999)));
-
-			for (JsonNode indicator : sorted) {
+			
+			Collections.sort(sorted, new Comparator<JsonNode>() {
+				
+				@Override
+				public int compare(JsonNode a, JsonNode b) {
+					Integer s1 = Integer.valueOf(a.path("sortOrder").asInt(9999));
+					Integer s2 = Integer.valueOf(b.path("sortOrder").asInt(9999));
+					return s1.compareTo(s2);
+				}
+			});
+			
+			int i;
+			for (i = 0; i < sorted.size(); i++) {
+				JsonNode indicator = sorted.get(i);
 				ObjectNode row = objectMapper.createObjectNode();
 				row.put("type", "indicator");
 				row.put("indicatorUuid", indicator.path("indicatorUuid").asText(""));
@@ -1054,18 +1145,18 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 				row.put("showDisaggregation", looksDisaggregated(indicator, sectionConfig));
 				row.put("span", "label-only");
 				row.put("emphasis", "normal");
-
+				
 				ObjectNode dims = objectMapper.createObjectNode();
 				if (looksDisaggregated(indicator, sectionConfig)) {
 					dims.put("age", sectionConfig.path("disaggregation").path("ageCategoryCode").asText(""));
 					dims.put("sex", "sex");
 				}
 				row.set("dims", dims);
-
+				
 				rows.add(row);
 			}
 		}
-
+		
 		group.set("rows", rows);
 		return group;
 	}
@@ -1088,7 +1179,9 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			return;
 		}
 		
-		for (JsonNode m : mappings) {
+		Iterator<JsonNode> mappingIterator = mappings.elements();
+		while (mappingIterator.hasNext()) {
+			JsonNode m = mappingIterator.next();
 			ObjectNode row = objectMapper.createObjectNode();
 			row.put("indicatorUuid", m.path("indicatorUuid").asText(""));
 			row.put("indicatorCode", m.path("indicatorCode").asText(""));
@@ -1119,7 +1212,9 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		if (design == null) {
 			List<ReportDesign> existing = reportService.getReportDesigns(reportDefinition, null, false);
 			if (existing != null) {
-				for (ReportDesign d : existing) {
+				int i;
+				for (i = 0; i < existing.size(); i++) {
+					ReportDesign d = existing.get(i);
 					if ("JSON".equalsIgnoreCase(d.getName())) {
 						design = d;
 						break;
@@ -1158,37 +1253,49 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	private ArrayNode compileSectionToReportFields(String sectionName, JsonNode sectionConfig) {
 		ArrayNode out = objectMapper.createArrayNode();
 		JsonNode indicators = sectionConfig.path("indicators");
-
+		
 		if (!indicators.isArray()) {
 			return out;
 		}
-
+		
 		List<JsonNode> sorted = new ArrayList<JsonNode>();
-		for (JsonNode ind : indicators) {
-			sorted.add(ind);
+		Iterator<JsonNode> indicatorIterator = indicators.elements();
+		while (indicatorIterator.hasNext()) {
+			sorted.add(indicatorIterator.next());
 		}
-		sorted.sort(Comparator.comparingInt(a -> a.path("sortOrder").asInt(9999)));
-
-		for (JsonNode indicator : sorted) {
+		
+		Collections.sort(sorted, new Comparator<JsonNode>() {
+			
+			@Override
+			public int compare(JsonNode a, JsonNode b) {
+				Integer s1 = Integer.valueOf(a.path("sortOrder").asInt(9999));
+				Integer s2 = Integer.valueOf(b.path("sortOrder").asInt(9999));
+				return s1.compareTo(s2);
+			}
+		});
+		
+		int i;
+		for (i = 0; i < sorted.size(); i++) {
+			JsonNode indicator = sorted.get(i);
 			String sql = indicator.path("sql").path("compiled").asText(null);
 			if (sql == null || sql.trim().isEmpty()) {
 				continue;
 			}
-
+			
 			ObjectNode field = objectMapper.createObjectNode();
 			field.put("indicator_name", indicator.path("code").asText(""));
 			field.put("indicator_label", indicator.path("name").asText(""));
 			field.put("subsection", sectionName);
 			field.put("sqlQuery", decodeHtml(sql));
-
+			
 			boolean isDisaggregated = looksDisaggregated(indicator, sectionConfig);
-
+			
 			if (isDisaggregated) {
 				ArrayNode dissaggregations = objectMapper.createArrayNode();
 				dissaggregations.add("age_group");
 				dissaggregations.add("gender");
 				field.set("dissaggregations", dissaggregations);
-
+				
 				ArrayNode values = buildDisaggregatedValues(indicator, sectionConfig);
 				if (values.size() > 0) {
 					field.set("values", values);
@@ -1198,10 +1305,10 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			} else {
 				field.put("value_place_holder", buildSinglePlaceholder(indicator));
 			}
-
+			
 			out.add(field);
 		}
-
+		
 		return out;
 	}
 	
@@ -1226,8 +1333,12 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		List<String> ageLabels = resolveAgeGroupLabels(ageCategoryCode);
 		
 		if (!ageLabels.isEmpty() && genders.isArray()) {
-			for (String ageLabel : ageLabels) {
-				for (JsonNode g : genders) {
+			int i;
+			for (i = 0; i < ageLabels.size(); i++) {
+				String ageLabel = ageLabels.get(i);
+				Iterator<JsonNode> genderIterator = genders.elements();
+				while (genderIterator.hasNext()) {
+					JsonNode g = genderIterator.next();
 					String gender = g.asText("");
 					
 					ObjectNode one = objectMapper.createObjectNode();
@@ -1291,8 +1402,9 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	}
 	
 	private String decodeHtml(String s) {
-		if (s == null)
+		if (s == null) {
 			return "";
+		}
 		return s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
 		        .replace("&#39;", "'");
 	}
@@ -1301,17 +1413,41 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		if (ageCategoryCode == null || ageCategoryCode.trim().isEmpty()) {
 			return Collections.emptyList();
 		}
-
+		
 		ReportBuilderAgeCategory category = getAgeCategoryByCode(ageCategoryCode);
 		if (category == null || category.getAgeGroups() == null || category.getAgeGroups().isEmpty()) {
 			return Collections.emptyList();
 		}
-
-		return category.getAgeGroups().stream()
-				.filter(g -> g != null && Boolean.TRUE.equals(g.getActive()) && g.getLabel() != null && !g.getLabel().trim().isEmpty())
-				.sorted(Comparator.comparingInt(g -> g.getSortOrder() == null ? Integer.MAX_VALUE : g.getSortOrder()))
-				.map(ReportBuilderAgeGroup::getLabel)
-				.collect(Collectors.toList());
+		
+		List<ReportBuilderAgeGroup> groups = new ArrayList<ReportBuilderAgeGroup>(category.getAgeGroups());
+		Collections.sort(groups, new Comparator<ReportBuilderAgeGroup>() {
+			
+			@Override
+			public int compare(ReportBuilderAgeGroup g1, ReportBuilderAgeGroup g2) {
+				Integer s1 = g1.getSortOrder();
+				Integer s2 = g2.getSortOrder();
+				
+				if (s1 == null) {
+					s1 = Integer.valueOf(Integer.MAX_VALUE);
+				}
+				if (s2 == null) {
+					s2 = Integer.valueOf(Integer.MAX_VALUE);
+				}
+				
+				return s1.compareTo(s2);
+			}
+		});
+		
+		List<String> labels = new ArrayList<String>();
+		int i;
+		for (i = 0; i < groups.size(); i++) {
+			ReportBuilderAgeGroup g = groups.get(i);
+			if (g != null && Boolean.TRUE.equals(g.getActive()) && g.getLabel() != null && !g.getLabel().trim().isEmpty()) {
+				labels.add(g.getLabel());
+			}
+		}
+		
+		return labels;
 	}
 	
 	private String buildDisaggregatedPlaceholder(String indicatorCode, String ageLabel, String gender) {
@@ -1325,7 +1461,9 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			return out;
 		}
 		
-		for (JsonNode sectionRef : sections) {
+		Iterator<JsonNode> sectionIterator = sections.elements();
+		while (sectionIterator.hasNext()) {
+			JsonNode sectionRef = sectionIterator.next();
 			String sectionUuid = sectionRef.path("sectionUuid").asText(null);
 			if (sectionUuid == null || sectionUuid.trim().isEmpty()) {
 				continue;
@@ -1482,10 +1620,14 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		List<String> prefixes = new ArrayList<String>();
 		List<ETLSource> sources = dao.getAllETLSources(false);
 		
-		for (ETLSource source : sources) {
+		int i;
+		for (i = 0; i < sources.size(); i++) {
+			ETLSource source = sources.get(i);
 			if (Boolean.TRUE.equals(source.getActive()) && source.getTablePatterns() != null) {
 				String[] parts = source.getTablePatterns().split(",");
-				for (String part : parts) {
+				int j;
+				for (j = 0; j < parts.length; j++) {
+					String part = parts[j];
 					String value = part == null ? null : part.trim();
 					if (value != null && !value.isEmpty()) {
 						prefixes.add(value);
@@ -1496,5 +1638,4 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		
 		return prefixes;
 	}
-	
 }

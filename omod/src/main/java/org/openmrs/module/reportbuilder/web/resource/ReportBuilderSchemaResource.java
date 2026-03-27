@@ -89,20 +89,20 @@ public class ReportBuilderSchemaResource extends DelegatingCrudResource<ReportBu
 	}
 	
 	@Override
-    public PageableResult doGetAll(RequestContext context) throws ResponseException {
-
-        String q = context.getParameter("q"); // optional filter on table name
-        List<String> tables = service().getETLTables();
-
-        List<ETLTableRef> results = new ArrayList<>();
-        for (String t : tables) {
-            if (q == null || q.trim().isEmpty() || t.toLowerCase().contains(q.toLowerCase())) {
-                results.add(new ETLTableRef(t));
-            }
-        }
-
-        return new NeedsPaging<>(results, context);
-    }
+	public PageableResult doGetAll(RequestContext context) throws ResponseException {
+		
+		String q = context.getParameter("q"); // optional filter on table name
+		List<String> tables = service().getETLTables();
+		
+		List<ETLTableRef> results = new ArrayList<>();
+		for (String t : tables) {
+			if (q == null || q.trim().isEmpty() || t.toLowerCase().contains(q.toLowerCase())) {
+				results.add(new ETLTableRef(t));
+			}
+		}
+		
+		return new NeedsPaging<>(results, context);
+	}
 	
 	@Override
 	protected PageableResult doSearch(RequestContext context) throws ResponseException {

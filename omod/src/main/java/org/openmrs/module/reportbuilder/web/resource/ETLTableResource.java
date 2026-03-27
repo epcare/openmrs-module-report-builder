@@ -84,32 +84,32 @@ public class ETLTableResource extends DelegatingCrudResource<ETLTableResource.ET
 	}
 	
 	@Override
-    public PageableResult doGetAll(RequestContext context) throws ResponseException {
-        List<String> names = service().getETLTables(); // from DAO query INFORMATION_SCHEMA
-
-        List<ETLTable> rows = new ArrayList<>();
-        for (String n : names) {
-            rows.add(new ETLTable(n));
-        }
-
-        // NeedsPaging will apply startIndex & limit automatically
-        return new NeedsPaging<>(rows, context);
-    }
+	public PageableResult doGetAll(RequestContext context) throws ResponseException {
+		List<String> names = service().getETLTables(); // from DAO query INFORMATION_SCHEMA
+		
+		List<ETLTable> rows = new ArrayList<>();
+		for (String n : names) {
+			rows.add(new ETLTable(n));
+		}
+		
+		// NeedsPaging will apply startIndex & limit automatically
+		return new NeedsPaging<>(rows, context);
+	}
 	
 	@Override
-    protected PageableResult doSearch(RequestContext context) throws ResponseException {
-        // optional: allow q filter on table name
-        String q = context.getParameter("q");
-        List<String> names = service().getETLTables();
-
-        List<ETLTable> rows = new ArrayList<>();
-        for (String n : names) {
-            if (q == null || q.trim().isEmpty() || n.toLowerCase().contains(q.toLowerCase())) {
-                rows.add(new ETLTable(n));
-            }
-        }
-        return new NeedsPaging<>(rows, context);
-    }
+	protected PageableResult doSearch(RequestContext context) throws ResponseException {
+		// optional: allow q filter on table name
+		String q = context.getParameter("q");
+		List<String> names = service().getETLTables();
+		
+		List<ETLTable> rows = new ArrayList<>();
+		for (String n : names) {
+			if (q == null || q.trim().isEmpty() || n.toLowerCase().contains(q.toLowerCase())) {
+				rows.add(new ETLTable(n));
+			}
+		}
+		return new NeedsPaging<>(rows, context);
+	}
 	
 	@Override
 	public DelegatingResourceDescription getRepresentationDescription(Representation rep) {

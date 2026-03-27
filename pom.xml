@@ -1,12 +1,13 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-		xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>org.openmrs.maven.parents</groupId>
-        <artifactId>maven-parent-openmrs-module</artifactId>
-        <version>1.1.1</version>
-    </parent>
+	<parent>
+		<groupId>org.openmrs.maven.parents</groupId>
+		<artifactId>maven-parent-openmrs-module</artifactId>
+		<version>1.1.1</version>
+	</parent>
 
 	<groupId>org.openmrs.module</groupId>
 	<artifactId>reportbuilder</artifactId>
@@ -27,6 +28,21 @@
 		<module>api</module>
 		<module>omod</module>
 	</modules>
+
+	<properties>
+		<openmrsPlatformVersion>2.6.3</openmrsPlatformVersion>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<maven.compiler.source>1.7</maven.compiler.source>
+		<maven.compiler.target>1.7</maven.compiler.target>
+
+		<calculationVersion>1.1</calculationVersion>
+		<luceneVersion>6.6.0</luceneVersion>
+		<reportingVersion>1.25.0</reportingVersion>
+		<serialization.xstreamVersion>0.2.10</serialization.xstreamVersion>
+		<webservices.restModuleVersion>2.28.0</webservices.restModuleVersion>
+		<reportingCompatibilityVersion>2.0.9</reportingCompatibilityVersion>
+		<javaxAnnotationVersion>1.3.2</javaxAnnotationVersion>
+	</properties>
 
 	<dependencyManagement>
 		<dependencies>
@@ -70,8 +86,8 @@
 				<type>pom</type>
 				<scope>test</scope>
 			</dependency>
-
 			<!-- End OpenMRS core -->
+
 			<dependency>
 				<groupId>org.openmrs.module</groupId>
 				<artifactId>calculation-api</artifactId>
@@ -100,16 +116,12 @@
 			</dependency>
 
 			<dependency>
-				<groupId>org.apache.commons</groupId>
-				<artifactId>commons-math3</artifactId>
-				<version>3.2</version>
-			</dependency>
-			<dependency>
 				<groupId>org.openmrs.module</groupId>
 				<artifactId>webservices.rest-omod-common</artifactId>
 				<version>${webservices.restModuleVersion}</version>
 				<scope>provided</scope>
 			</dependency>
+
 			<dependency>
 				<groupId>org.openmrs.module</groupId>
 				<artifactId>webservices.rest-omod-common</artifactId>
@@ -117,6 +129,7 @@
 				<scope>provided</scope>
 				<type>test-jar</type>
 			</dependency>
+
 			<dependency>
 				<groupId>javax.annotation</groupId>
 				<artifactId>javax.annotation-api</artifactId>
@@ -146,6 +159,7 @@
 			<url>https://repo1.maven.org/maven2</url>
 		</repository>
 	</repositories>
+
 	<pluginRepositories>
 		<pluginRepository>
 			<id>openmrs-repo</id>
@@ -160,6 +174,25 @@
 	<build>
 		<pluginManagement>
 			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-compiler-plugin</artifactId>
+					<version>3.13.0</version>
+					<configuration>
+						<source>${maven.compiler.source}</source>
+						<target>${maven.compiler.target}</target>
+					</configuration>
+				</plugin>
+
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-surefire-plugin</artifactId>
+					<version>3.2.5</version>
+					<configuration>
+						<failIfNoTests>false</failIfNoTests>
+					</configuration>
+				</plugin>
+
 				<!-- Spotless plugin -->
 				<plugin>
 					<groupId>com.diffplug.spotless</groupId>
@@ -168,10 +201,10 @@
 					<configuration>
 						<java>
 							<licenseHeader>
-								<file>${project.basedir}/license-header.txt</file>
+								<file>${maven.multiModuleProjectDirectory}/license-header.txt</file>
 							</licenseHeader>
 							<eclipse>
-								<file>${project.basedir}/OpenMRSFormatter.xml</file>
+								<file>${maven.multiModuleProjectDirectory}/OpenMRSFormatter.xml</file>
 							</eclipse>
 							<removeUnusedImports/>
 							<importOrder>
@@ -184,7 +217,7 @@
 									<include>**/*.xml</include>
 								</includes>
 								<licenseHeader>
-									<file>${project.basedir}/license-header.txt</file>
+									<file>${maven.multiModuleProjectDirectory}/license-header.txt</file>
 									<delimiter>^(?!&lt;\?xml)</delimiter>
 								</licenseHeader>
 							</format>
@@ -203,18 +236,4 @@
 			</plugins>
 		</pluginManagement>
 	</build>
-
-
-	<properties>
-		<openmrsPlatformVersion>2.7.4</openmrsPlatformVersion>
-		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
-		<calculationVersion>1.1</calculationVersion>
-		<luceneVersion>6.6.0</luceneVersion>
-		<reportingVersion>1.25.0</reportingVersion>
-		<serialization.xstreamVersion>0.2.10</serialization.xstreamVersion>
-		<webservices.restModuleVersion>2.28.0</webservices.restModuleVersion>
-		<reportingCompatibilityVersion>2.0.9</reportingCompatibilityVersion>
-		<javaxAnnotationVersion>1.3.2</javaxAnnotationVersion>
-	</properties>
 </project>

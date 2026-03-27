@@ -1,0 +1,16 @@
+dist: trusty
+language: java
+jdk:
+- oraclejdk8
+before_install:
+- wget https://archive.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.zip
+- unzip -qq apache-maven-3.3.9-bin.zip
+- export M2_HOME=$PWD/apache-maven-3.3.9
+- export PATH=$M2_HOME/bin:$PATH
+script:
+- if [ "$TRAVIS_BRANCH" = "master" ] && [ "$TRAVIS_PULL_REQUEST" = "false" ]; then
+  cp maven-settings.xml $HOME/.m2/settings.xml && mvn deploy; else mvn install; fi
+env:
+  global:
+  - secure: VPl07HSk+xL+TDtKPO8waPsZSAn4dsGiMfxIYreVReus0oVuomdN89W89Rs2w3dz/S/gDb6AooY5vrTIt0U4+AXa8mnJAOvY4ANYCJUbIE+aDFQpzfkLGCDRLvbCuet3EmcFS7tjmK0l19qu0A36p0VJIxXGRBbNj6XzTnNL1v0y5E0tx9Y0DQBBD99uM8AKP8avjjRM9aAIs9ru1dB5+dWF2+9SwQhsAVwuTfUtarFIBCL8o8Lk1t4U54l74Y4Yof1bcuoLUSXCxeU8xcXcWYfEy9Jy3Og2j1tCi6j9Wd6MBTs4NPAv0eiHIwsgVwZkl6EeL3CQZEdjG0PtM+27q/1VUBGFKBICM3AmUEMKElpNbdzyZETclBVBeFvxOhSxD2fg0pi1BBnUJ/hrSesThlnnlqQ2KgJQ4ngqn1AEUZFz1iA2gKqxFZcYH7HB95BHBF7Y/dpV+/9oMX6OKcAwGOIWYNM7ufSL8T45RTnJZlqFycjmLW5t3QZu0XiZTmxHQMmjLiML2TUuC3iqugOY7kFf5RLokUguHiqOiAXvV6LTLDvy9zXEHfvZXawNVoVJ5ksfOLoYJuD/dyuB1xzQyTMgQNMv8J8URTQR47phLlGRx7dESlLPzx86DW4mZwvG0xuFfLJelw6r/aNT1n9JYgcE3OHlBkXw3fWCGE/ZMKA=
+  - secure: d5Ykx7Nb5qw+uPovZ6eBB3g11AmNRv36O0/D904pP5T9ceZmhCBp6gbiLszpoQrgNpRaifZiZoFgdrhc1byMZdceNAJgOTI0XIQAT1MNweVlGYajHBFgeENHLMZL2BUjHq3WhM0Rbqi1Ru+A5F7bqG6FeSSfn2aOqwRQT/xpR6qzzjqJaTwF2LxLwAVHDc7ukZhSwLd3oPngUx595cTbe9x88/8DFZOaucdTOXuV56G/QUjFx9C4XIe0u84zldFIKCbgUFM8Ex4YB8ggi6aEJ8acWBdjiLqqxNnY5fuD9F7C1qmq5k4eVgHUMhnZnZz1LzQnLbjbgXIBgrcM3lvksrNncqYfF3LUE4qhMpDRMdk0MeaVx4Ym6XfAMaxVC9pWEoSSQ2GGy7ob1HQ28nSw+qsQ+n99C0+CY14akC4f7U/T1NWcIYUsYlAqkEMaZqQDeiu2zrkuC5mjL3uhp21s9oAV9u6KaNgWbBIf8NtnK1Gw0zg/rbxrKwQxrd0gDjI+R6W2YaKlfoe6lUI0ImT4V2BFzDYizqYsbyXLGD9XJTQ8nGYMgC8AjCxJHKO9OBMO0DQ3tAdCZ0xnPugDcZ0SibRFhQtBq6zB4tMmBm4mOPsEAi3V9QhAT1aV/389DCoMCBi6dVT4waVBOYYLTtbrKdqZQlzlO/tM/2/K1ggCDG4=

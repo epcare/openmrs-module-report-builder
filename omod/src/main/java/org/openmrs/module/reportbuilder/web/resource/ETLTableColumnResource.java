@@ -109,22 +109,22 @@ public class ETLTableColumnResource extends DelegatingCrudResource<ETLTableColum
 	}
 	
 	@Override
-    protected PageableResult doSearch(RequestContext context) throws ResponseException {
-        // optional: allow q filter on table name
-        String tableName = context.getParameter("table");
-
-        List<Map> columns = service().getETLTableColumns(tableName);
-
-        List<ETLTableColumn> rows = new ArrayList<>();
-        for (Map row : columns) {
-            String columnName = String.valueOf(row.get("columnName"));
-            String dataType = String.valueOf(row.get("dataType"));
-
-            rows.add(new ETLTableColumn(tableName, columnName, dataType));
-        }
-
-        return new NeedsPaging<>(rows, context);
-    }
+	protected PageableResult doSearch(RequestContext context) throws ResponseException {
+		// optional: allow q filter on table name
+		String tableName = context.getParameter("table");
+		
+		List<Map> columns = service().getETLTableColumns(tableName);
+		
+		List<ETLTableColumn> rows = new ArrayList<>();
+		for (Map row : columns) {
+			String columnName = String.valueOf(row.get("columnName"));
+			String dataType = String.valueOf(row.get("dataType"));
+			
+			rows.add(new ETLTableColumn(tableName, columnName, dataType));
+		}
+		
+		return new NeedsPaging<>(rows, context);
+	}
 	
 	@Override
 	public DelegatingResourceDescription getRepresentationDescription(Representation rep) {

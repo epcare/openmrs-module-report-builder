@@ -46,78 +46,91 @@ public class EvaluateReportController {
 	public ReportService reportService;
 	
 	@RequestMapping(method = RequestMethod.GET)
-    @ResponseBody
-    public Object getReportData(HttpServletRequest request, @RequestParam(value = "uuid") String reportDefinitionUuid, @RequestParam(required = false, value = "renderType") String renderType) {
-        try {
-            // Validate endDate if provided
-            String endDateStr = request.getParameter("endDate");
-            if (endDateStr != null && !endDateStr.trim().isEmpty() && !validateDateIsValidFormat(endDateStr)) {
-                SimpleObject message = new SimpleObject();
-                message.put("error", "given date " + endDateStr + " is not valid");
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON).body(message);
-            }
-
-            // 1) Evaluate report
-            ReportDefinitionService reportDefinitionService = Context.getService(ReportDefinitionService.class);
-            ReportDefinition reportDefinition = reportDefinitionService.getDefinitionByUuid(reportDefinitionUuid);
-
-            if (reportDefinition == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON).body("{\"error\":\"ReportDefinition not found\"}");
-            }
-
-            EvaluationContext evaluationContext = new EvaluationContext();
-
-            evaluationContext.setParameterValues(resolveParameterValues(request, reportDefinition));
-
-            ReportData reportData = reportDefinitionService.evaluate(reportDefinition, evaluationContext);
-
-            // 2) If no renderType -> return datasets (old behavior)
-            if (renderType == null || renderType.trim().isEmpty()) {
-                Map<String, List<SimpleObject>> out = new HashMap<String, List<SimpleObject>>();
-                for (Map.Entry<String, DataSet> e : reportData.getDataSets().entrySet()) {
-                    out.put(e.getKey(), convertDataSetToSimpleObject(e.getValue()));
-                }
-
-                return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(out);
-            }
-
-            // 3) Find JSON design (same logic you used)
-            List<ReportDesign> designs = reportService.getReportDesigns(reportDefinition, null, false);
-            ReportDesign jsonDesign = designs.stream().filter(d -> "JSON".equals(d.getName())).findFirst().orElse(null);
-
-            if (jsonDesign == null) {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.APPLICATION_JSON).body("{\"error\":\"No JSON design found\"}");
-            }
-
-            ReportBuilderService reportBuilderService = Context.getService(ReportBuilderService.class);
-
-            // 4) Render based on renderType
-            if ("html".equalsIgnoreCase(renderType)) {
-                String rendered = reportBuilderService.buildRenderedOutput(reportData, jsonDesign, null);
-                return ResponseEntity.status(HttpStatus.OK)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(rendered);
-            }
-
-            if ("json".equalsIgnoreCase(renderType)) {
-                Date endDate = null;
-                if (endDateStr != null && !endDateStr.trim().isEmpty()) {
-                    endDate = new SimpleDateFormat("yyyy-MM-dd").parse(endDateStr);
-                }
-
-                // if endDate provided -> final payload (with period), else preview payload
-                String payload = (endDate != null) ? reportBuilderService.buildFinalPayloadJson(reportData, jsonDesign, "json", endDate) : reportBuilderService.buildPayloadJson(reportData, jsonDesign, "json");
-
-                return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(payload);
-            }
-
-            // default
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON).body("{\"error\":\"Unsupported renderType. Use json or html\"}");
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.APPLICATION_JSON).body("{\"error\":\"" + e.getMessage() + "\"}");
-        }
-    }
+	@ResponseBody
+	public Object getReportData(HttpServletRequest request, @RequestParam(value = "uuid") String reportDefinitionUuid,
+	        @RequestParam(required = false, value = "renderType") String renderType) {
+		try {
+			// Validate endDate if provided
+			String endDateStr = request.getParameter("endDate");
+			if (endDateStr != null && !endDateStr.trim().isEmpty() && !validateDateIsValidFormat(endDateStr)) {
+				SimpleObject message = new SimpleObject();
+				message.put("error", "given date " + endDateStr + " is not valid");
+				return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON).body(message);
+			}
+			
+			// 1) Evaluate report
+			ReportDefinitionService reportDefinitionService = Context.getService(ReportDefinitionService.class);
+			ReportDefinition reportDefinition = reportDefinitionService.getDefinitionByUuid(reportDefinitionUuid);
+			
+			if (reportDefinition == null) {
+				return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
+				        .body("{\"error\":\"ReportDefinition not found\"}");
+			}
+			
+			EvaluationContext evaluationContext = new EvaluationContext();
+			
+			evaluationContext.setParameterValues(resolveParameterValues(request, reportDefinition));
+			
+			ReportData reportData = reportDefinitionService.evaluate(reportDefinition, evaluationContext);
+			
+			// 2) If no renderType -> return datasets (old behavior)
+			if (renderType == null || renderType.trim().isEmpty()) {
+				Map<String, List<SimpleObject>> out = new HashMap<String, List<SimpleObject>>();
+				for (Map.Entry<String, DataSet> e : reportData.getDataSets().entrySet()) {
+					out.put(e.getKey(), convertDataSetToSimpleObject(e.getValue()));
+				}
+				
+				return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(out);
+			}
+			
+			// 3) Find JSON design (same logic you used)
+			List<ReportDesign> designs = reportService.getReportDesigns(reportDefinition, null, false);
+			ReportDesign jsonDesign = null;
+			if (designs != null) {
+				for (ReportDesign design : designs) {
+					if ("JSON".equals(design.getName())) {
+						jsonDesign = design;
+						break;
+					}
+				}
+			}
+			
+			if (jsonDesign == null) {
+				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.APPLICATION_JSON)
+				        .body("{\"error\":\"No JSON design found\"}");
+			}
+			
+			ReportBuilderService reportBuilderService = Context.getService(ReportBuilderService.class);
+			
+			// 4) Render based on renderType
+			if ("html".equalsIgnoreCase(renderType)) {
+				String rendered = reportBuilderService.buildRenderedOutput(reportData, jsonDesign, null);
+				return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(rendered);
+			}
+			
+			if ("json".equalsIgnoreCase(renderType)) {
+				Date endDate = null;
+				if (endDateStr != null && !endDateStr.trim().isEmpty()) {
+					endDate = new SimpleDateFormat("yyyy-MM-dd").parse(endDateStr);
+				}
+				
+				// if endDate provided -> final payload (with period), else preview payload
+				String payload = (endDate != null) ? reportBuilderService.buildFinalPayloadJson(reportData, jsonDesign,
+				    "json", endDate) : reportBuilderService.buildPayloadJson(reportData, jsonDesign, "json");
+				
+				return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(payload);
+			}
+			
+			// default
+			return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+			        .body("{\"error\":\"Unsupported renderType. Use json or html\"}");
+			
+		}
+		catch (Exception e) {
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.APPLICATION_JSON)
+			        .body("{\"error\":\"" + e.getMessage() + "\"}");
+		}
+	}
 	
 	private Map<String, Object> resolveParameterValues(HttpServletRequest request, ReportDefinition rd) {
 		Map<String, Object> vals = new HashMap<String, Object>();

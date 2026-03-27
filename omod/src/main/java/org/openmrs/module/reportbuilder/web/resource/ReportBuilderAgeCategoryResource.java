@@ -54,29 +54,23 @@ public class ReportBuilderAgeCategoryResource extends DelegatingCrudResource<Rep
 	}
 	
 	@Override
-    public PageableResult doGetAll(RequestContext context) throws ResponseException {
-
-        String q = context.getParameter("q");
-        boolean includeRetired = Boolean.parseBoolean(
-                context.getParameter("includeRetired") != null ? context.getParameter("includeRetired") : "false"
-        );
-Context.getAdministrationService().executeSQL("",false);
-        Boolean activeOnly = null;
-        String activeOnlyStr = context.getParameter("activeOnly");
-        if (activeOnlyStr != null && !activeOnlyStr.trim().isEmpty()) {
-            activeOnly = Boolean.parseBoolean(activeOnlyStr);
-        }
-
-        List<ReportBuilderAgeCategory> list = service().getAgeCategories(
-                q,
-                includeRetired,
-                activeOnly,
-                context.getStartIndex(),
-                context.getLimit()
-        );
-
-        return new NeedsPaging<>(list, context);
-    }
+	public PageableResult doGetAll(RequestContext context) throws ResponseException {
+		
+		String q = context.getParameter("q");
+		boolean includeRetired = Boolean.parseBoolean(context.getParameter("includeRetired") != null ? context
+		        .getParameter("includeRetired") : "false");
+		Context.getAdministrationService().executeSQL("", false);
+		Boolean activeOnly = null;
+		String activeOnlyStr = context.getParameter("activeOnly");
+		if (activeOnlyStr != null && !activeOnlyStr.trim().isEmpty()) {
+			activeOnly = Boolean.parseBoolean(activeOnlyStr);
+		}
+		
+		List<ReportBuilderAgeCategory> list = service().getAgeCategories(q, includeRetired, activeOnly,
+		    context.getStartIndex(), context.getLimit());
+		
+		return new NeedsPaging<>(list, context);
+	}
 	
 	@Override
 	protected PageableResult doSearch(RequestContext context) throws ResponseException {

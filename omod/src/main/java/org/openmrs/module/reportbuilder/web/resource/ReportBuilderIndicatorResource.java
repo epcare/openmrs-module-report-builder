@@ -60,68 +60,81 @@ public class ReportBuilderIndicatorResource extends DelegatingCrudResource<Repor
 	// ---------------------------
 	
 	@Override
-    public PageableResult doGetAll(RequestContext context) {
-
-        Integer startIndex = context.getStartIndex();
-        Integer limit = context.getLimit();
-        List<ReportBuilderIndicator> results = service().getAllReportBuilderIndicator(startIndex, limit);
-
-        return new NeedsPaging<>(results, context);
-    }
+	public PageableResult doGetAll(RequestContext context) {
+		
+		Integer startIndex = context.getStartIndex();
+		Integer limit = context.getLimit();
+		List<ReportBuilderIndicator> results = service().getAllReportBuilderIndicator(startIndex, limit);
+		
+		return new NeedsPaging<>(results, context);
+	}
 	
 	@Override
-    protected PageableResult doSearch(RequestContext context) {
-        String q = trimToNull(context.getParameter("q"));
-        String kindStr = trimToNull(context.getParameter("kind"));
-        String defaultValueTypeStr = trimToNull(context.getParameter("defaultValueType"));
-
-        // prefer retired=false/true (explicit) but keep includeRetired for backwards compat
-        Boolean retired = parseBooleanOrNull(context.getParameter("retired"));
-        Boolean includeRetired = parseBooleanOrNull(context.getParameter("includeRetired"));
-
-        // final includeRetired decision:
-        // - if retired is provided, it wins
-        // - else includeRetired defaults false
-        boolean includeRetiredFinal;
-        if (retired != null) {
-            // if user asked retired=true => includeRetired=true and filter retired only in service,
-            // but since service signature is includeRetired(boolean) we use:
-            includeRetiredFinal = true;
-        } else if (includeRetired != null) {
-            includeRetiredFinal = includeRetired;
-        } else {
-            includeRetiredFinal = false;
-        }
-
-        ReportBuilderIndicator.Kind kind = parseEnumOrNull(kindStr, ReportBuilderIndicator.Kind.class, "kind");
-
-        ReportBuilderIndicator.ValueType defaultValueType = parseEnumOrNull(defaultValueTypeStr, ReportBuilderIndicator.ValueType.class, "defaultValueType");
-
-        Integer startIndex = context.getStartIndex();
-        Integer limit = context.getLimit();
-
-        // If you want "retired=true only" support, your service should allow it.
-        // For now, we pass includeRetiredFinal and let service decide.
-
-        List<ReportBuilderIndicator> results = new ArrayList<>();
-        if (q != null) {
-            results = service().searchReportBuilderIndicators(q, kind, includeRetiredFinal, startIndex, limit);
-        } else {
-            results = service().getReportBuilderIndicators(kind, includeRetiredFinal, startIndex, limit);
-        }
-
-        // Optional: if client requested retired=true/false explicitly, filter here if service doesn't support it.
-        if (retired != null) {
-            results.removeIf(ind -> ind == null || ind.isRetired() != retired);
-        }
-
-        // Optional: if requested defaultValueType, filter here if service doesn't support it
-        if (defaultValueType != null) {
-            results.removeIf(ind -> ind == null || ind.getDefaultValueType() != defaultValueType);
-        }
-
-        return new NeedsPaging<>(results, context);
-    }
+	protected PageableResult doSearch(RequestContext context) {
+		String q = trimToNull(context.getParameter("q"));
+		String kindStr = trimToNull(context.getParameter("kind"));
+		String defaultValueTypeStr = trimToNull(context.getParameter("defaultValueType"));
+		
+		// prefer retired=false/true (explicit) but keep includeRetired for backwards compat
+		Boolean retired = parseBooleanOrNull(context.getParameter("retired"));
+		Boolean includeRetired = parseBooleanOrNull(context.getParameter("includeRetired"));
+		
+		// final includeRetired decision:
+		// - if retired is provided, it wins
+		// - else includeRetired defaults false
+		boolean includeRetiredFinal;
+		if (retired != null) {
+			// if user asked retired=true => includeRetired=true and filter retired only in service,
+			// but since service signature is includeRetired(boolean) we use:
+			includeRetiredFinal = true;
+		} else if (includeRetired != null) {
+			includeRetiredFinal = includeRetired;
+		} else {
+			includeRetiredFinal = false;
+		}
+		
+		ReportBuilderIndicator.Kind kind = parseEnumOrNull(kindStr, ReportBuilderIndicator.Kind.class, "kind");
+		
+		ReportBuilderIndicator.ValueType defaultValueType = parseEnumOrNull(defaultValueTypeStr,
+		    ReportBuilderIndicator.ValueType.class, "defaultValueType");
+		
+		Integer startIndex = context.getStartIndex();
+		Integer limit = context.getLimit();
+		
+		// If you want "retired=true only" support, your service should allow it.
+		// For now, we pass includeRetiredFinal and let service decide.
+		
+		List<ReportBuilderIndicator> results = new ArrayList<>();
+		if (q != null) {
+			results = service().searchReportBuilderIndicators(q, kind, includeRetiredFinal, startIndex, limit);
+		} else {
+			results = service().getReportBuilderIndicators(kind, includeRetiredFinal, startIndex, limit);
+		}
+		
+		// Optional: if client requested retired=true/false explicitly, filter here if service doesn't support it.
+		if (retired != null) {
+			List<ReportBuilderIndicator> filtered = new ArrayList<ReportBuilderIndicator>();
+			for (ReportBuilderIndicator ind : results) {
+				if (ind != null && ind.isRetired() == retired.booleanValue()) {
+					filtered.add(ind);
+				}
+			}
+			results = filtered;
+		}
+		
+		// Optional: if requested defaultValueType, filter here if service doesn't support it
+		if (defaultValueType != null) {
+			List<ReportBuilderIndicator> filtered = new ArrayList<ReportBuilderIndicator>();
+			for (ReportBuilderIndicator ind : results) {
+				if (ind != null && ind.getDefaultValueType() == defaultValueType) {
+					filtered.add(ind);
+				}
+			}
+			results = filtered;
+		}
+		
+		return new NeedsPaging<>(results, context);
+	}
 	
 	private String trimToNull(String v) {
 		if (v == null)

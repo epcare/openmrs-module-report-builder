@@ -4,9 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.openmrs.annotation.Handler;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
-import org.openmrs.module.reportbuilder.util.data.definition.AggregateDataSetDefinition;
 import org.openmrs.module.reportbuilder.model.ValueHolder;
 import org.openmrs.module.reportbuilder.util.PatientDataHelper;
+import org.openmrs.module.reportbuilder.util.data.definition.AggregateDataSetDefinition;
 import org.openmrs.module.reporting.common.DateUtil;
 import org.openmrs.module.reporting.dataset.DataSetRow;
 import org.openmrs.module.reporting.dataset.SimpleDataSet;
@@ -16,7 +16,6 @@ import org.openmrs.module.reporting.evaluation.EvaluationContext;
 import org.openmrs.module.reporting.evaluation.EvaluationException;
 import org.openmrs.module.reporting.evaluation.querybuilder.SqlQueryBuilder;
 import org.openmrs.module.reporting.evaluation.service.EvaluationService;
-
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.File;
@@ -86,7 +85,6 @@ public class AggregateDataSetEvaluator implements DataSetEvaluator {
 			}
 			
 			throw new RuntimeException("Unsupported report design format: " + file.getAbsolutePath());
-			
 		}
 		catch (Exception e) {
 			throw new RuntimeException("Failed to evaluate report design: " + file.getAbsolutePath(), e);
@@ -107,7 +105,6 @@ public class AggregateDataSetEvaluator implements DataSetEvaluator {
 			if (reportField.has("values")) {
 				List<ValueHolder> convertedResults = convertToValueHolderList(results);
 				row = placesValuesToDataSetRow(reportField, convertedResults, row);
-				
 			} else if (reportField.has("value_place_holder")) {
 				ValueHolder convertedResult = null;
 				if (results != null && !results.isEmpty()) {
@@ -295,35 +292,36 @@ public class AggregateDataSetEvaluator implements DataSetEvaluator {
 	}
 	
 	private static DataSetRow placesValuesToDataSetRow(JsonNode reportField, List<ValueHolder> values, DataSetRow row) {
-        JsonNode valuesArray = reportField.path("values");
-        PatientDataHelper pdh = new PatientDataHelper();
-
-        for (JsonNode valueObject : valuesArray) {
-            String dissaggregations1 = valueObject.path("dissaggregations1").asText();
-            String dissaggregations2 = valueObject.path("dissaggregations2").asText();
-            String valuePlaceHolder = valueObject.path("value_place_holder").asText();
-
-            ValueHolder valueHolder;
-            if (!values.isEmpty()) {
-                valueHolder = values.stream()
-                        .filter(v -> safeEquals(v.getDisag1(), dissaggregations1))
-                        .filter(v -> safeEquals(v.getDisag2(), dissaggregations2))
-                        .findFirst()
-                        .orElse(null);
-            } else {
-                valueHolder = null;
-            }
-
-            int count = 0;
-            if (valueHolder != null) {
-                count = safeInt(valueHolder.getPlaceholder());
-            }
-
-            pdh.addCol(row, valuePlaceHolder, count);
-        }
-
-        return row;
-    }
+		JsonNode valuesArray = reportField.path("values");
+		PatientDataHelper pdh = new PatientDataHelper();
+		
+		for (JsonNode valueObject : valuesArray) {
+			String dissaggregations1 = valueObject.path("dissaggregations1").asText();
+			String dissaggregations2 = valueObject.path("dissaggregations2").asText();
+			String valuePlaceHolder = valueObject.path("value_place_holder").asText();
+			
+			ValueHolder valueHolder = null;
+			if (!values.isEmpty()) {
+				int i;
+				for (i = 0; i < values.size(); i++) {
+					ValueHolder v = values.get(i);
+					if (safeEquals(v.getDisag1(), dissaggregations1) && safeEquals(v.getDisag2(), dissaggregations2)) {
+						valueHolder = v;
+						break;
+					}
+				}
+			}
+			
+			int count = 0;
+			if (valueHolder != null) {
+				count = safeInt(valueHolder.getPlaceholder());
+			}
+			
+			pdh.addCol(row, valuePlaceHolder, count);
+		}
+		
+		return row;
+	}
 	
 	private static DataSetRow placesValueToDataSetRow(JsonNode reportField, ValueHolder valueHolder, DataSetRow row) {
 		String valuePlaceHolder = reportField.path("value_place_holder").asText();
@@ -342,7 +340,9 @@ public class AggregateDataSetEvaluator implements DataSetEvaluator {
 		List<ValueHolder> valueHolderList = new ArrayList<ValueHolder>();
 		
 		if (results != null && !results.isEmpty()) {
-			for (Object[] result : results) {
+			int i;
+			for (i = 0; i < results.size(); i++) {
+				Object[] result = results.get(i);
 				if (result == null || result.length < 3) {
 					continue;
 				}

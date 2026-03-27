@@ -233,6 +233,9 @@ public interface ReportBuilderService extends OpenmrsService {
 	@Transactional
 	void retireETLSource(ETLSource etlSource, String retireReason);
 	
+	@Transactional(readOnly = true)
+	public List<String> getAllowedTablePrefixes();
+	
 	class CompiledReportArtifacts {
 		
 		private ReportBuilderReport reportBuilderReport;

@@ -517,59 +517,59 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 	}
 	
 	public SqlPreviewResult previewSql(String rawSql, Map<String, Object> params, Integer maxRows) {
-
-        if (rawSql == null || rawSql.trim().isEmpty()) {
-            throw new IllegalArgumentException("sql is required");
-        }
-
-        int rowsLimit = maxRows != null ? maxRows : 200;
-        rowsLimit = Math.max(1, Math.min(rowsLimit, 1000));
-
-        String sql = normalizeSql(rawSql);
-        validateSql(sql);
-
-        // UI SQL uses quoted params like ':startDate' - convert to bindable named params
-        sql = normalizeQuotedParams(sql);
-
-        // Enforce row limit for both SELECT and WITH (MySQL/MariaDB)
-        String limitedSql = wrapWithLimit(sql);
-
-        // DbSession supports createSQLQuery
-        SQLQuery q = getSession().createSQLQuery(limitedSql);
-        q.setCacheMode(CacheMode.IGNORE);
-
-        // bind request params
-        Map<String, Object> safeParams = (params != null) ? params : Collections.<String, Object>emptyMap();
-        for (Map.Entry<String, Object> e : safeParams.entrySet()) {
-            q.setParameter(e.getKey(), e.getValue());
-        }
-        q.setParameter("__maxRows", rowsLimit);
-
-        // result rows as Map<alias, value>
-        @SuppressWarnings("deprecation")
-        SQLQuery mapQuery = (SQLQuery) q.setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> result = (List<Map<String, Object>>) mapQuery.list();
-
-        List<String> columns = new ArrayList<>();
-        if (!result.isEmpty()) {
-            // Often LinkedHashMap - preserves column order from SQL
-            columns.addAll(result.get(0).keySet());
-        }
-
-        List<List<Object>> rows = new ArrayList<>();
-        for (Map<String, Object> rowMap : result) {
-            List<Object> row = new ArrayList<>(columns.size());
-            for (String c : columns) {
-                row.add(rowMap.get(c));
-            }
-            rows.add(row);
-        }
-
-        boolean truncated = rows.size() >= rowsLimit;
-        return new SqlPreviewResult(columns, rows, rows.size(), truncated);
-    }
+		
+		if (rawSql == null || rawSql.trim().isEmpty()) {
+			throw new IllegalArgumentException("sql is required");
+		}
+		
+		int rowsLimit = maxRows != null ? maxRows : 200;
+		rowsLimit = Math.max(1, Math.min(rowsLimit, 1000));
+		
+		String sql = normalizeSql(rawSql);
+		validateSql(sql);
+		
+		// UI SQL uses quoted params like ':startDate' - convert to bindable named params
+		sql = normalizeQuotedParams(sql);
+		
+		// Enforce row limit for both SELECT and WITH (MySQL/MariaDB)
+		String limitedSql = wrapWithLimit(sql);
+		
+		// DbSession supports createSQLQuery
+		SQLQuery q = getSession().createSQLQuery(limitedSql);
+		q.setCacheMode(CacheMode.IGNORE);
+		
+		// bind request params
+		Map<String, Object> safeParams = (params != null) ? params : Collections.<String, Object> emptyMap();
+		for (Map.Entry<String, Object> e : safeParams.entrySet()) {
+			q.setParameter(e.getKey(), e.getValue());
+		}
+		q.setParameter("__maxRows", rowsLimit);
+		
+		// result rows as Map<alias, value>
+		@SuppressWarnings("deprecation")
+		SQLQuery mapQuery = (SQLQuery) q.setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
+		
+		@SuppressWarnings("unchecked")
+		List<Map<String, Object>> result = (List<Map<String, Object>>) mapQuery.list();
+		
+		List<String> columns = new ArrayList<>();
+		if (!result.isEmpty()) {
+			// Often LinkedHashMap - preserves column order from SQL
+			columns.addAll(result.get(0).keySet());
+		}
+		
+		List<List<Object>> rows = new ArrayList<>();
+		for (Map<String, Object> rowMap : result) {
+			List<Object> row = new ArrayList<>(columns.size());
+			for (String c : columns) {
+				row.add(rowMap.get(c));
+			}
+			rows.add(row);
+		}
+		
+		boolean truncated = rows.size() >= rowsLimit;
+		return new SqlPreviewResult(columns, rows, rows.size(), truncated);
+	}
 	
 	// -------------------- helpers --------------------
 	

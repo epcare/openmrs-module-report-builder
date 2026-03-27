@@ -92,43 +92,38 @@ public class ReportBuilderAgeGroupResource extends DelegatingCrudResource<Report
 	}
 	
 	@Override
-    protected PageableResult doSearch(RequestContext context) throws ResponseException {
-
-        String q = context.getParameter("q");
-
-        // optional filters
-        String categoryUuid = context.getParameter("categoryUuid");
-        String categoryCode = context.getParameter("categoryCode");
-
-        Boolean activeOnly = null;
-        String activeOnlyStr = context.getParameter("activeOnly");
-        if (activeOnlyStr != null && !activeOnlyStr.trim().isEmpty()) {
-            activeOnly = Boolean.parseBoolean(activeOnlyStr);
-        }
-
-        ReportBuilderAgeCategory category = null;
-        if (categoryUuid != null && !categoryUuid.trim().isEmpty()) {
-            category = service().getAgeCategoryByUuid(categoryUuid);
-        } else if (categoryCode != null && !categoryCode.trim().isEmpty()) {
-            category = service().getAgeCategoryByCode(categoryCode);
-        }
-
-        // If you haven't implemented service search yet, return empty to avoid 500s.
-        List<ReportBuilderAgeGroup> groups;
-        try {
-            groups = service().getAgeGroups(
-                    q,
-                    category,
-                    activeOnly,
-                    context.getStartIndex(),
-                    context.getLimit()
-            );
-        } catch (Exception e) {
-            groups = Collections.emptyList();
-        }
-
-        return new NeedsPaging<>(groups, context);
-    }
+	protected PageableResult doSearch(RequestContext context) throws ResponseException {
+		
+		String q = context.getParameter("q");
+		
+		// optional filters
+		String categoryUuid = context.getParameter("categoryUuid");
+		String categoryCode = context.getParameter("categoryCode");
+		
+		Boolean activeOnly = null;
+		String activeOnlyStr = context.getParameter("activeOnly");
+		if (activeOnlyStr != null && !activeOnlyStr.trim().isEmpty()) {
+			activeOnly = Boolean.parseBoolean(activeOnlyStr);
+		}
+		
+		ReportBuilderAgeCategory category = null;
+		if (categoryUuid != null && !categoryUuid.trim().isEmpty()) {
+			category = service().getAgeCategoryByUuid(categoryUuid);
+		} else if (categoryCode != null && !categoryCode.trim().isEmpty()) {
+			category = service().getAgeCategoryByCode(categoryCode);
+		}
+		
+		// If you haven't implemented service search yet, return empty to avoid 500s.
+		List<ReportBuilderAgeGroup> groups;
+		try {
+			groups = service().getAgeGroups(q, category, activeOnly, context.getStartIndex(), context.getLimit());
+		}
+		catch (Exception e) {
+			groups = Collections.emptyList();
+		}
+		
+		return new NeedsPaging<>(groups, context);
+	}
 	
 	// ----------------------------
 	// Representations
