@@ -1,7 +1,7 @@
-# UgandaEMR Reporting Backend Module
+# OpenMRS Report Builder Module
 
-Backend module for the UgandaEMR Reporting project.  
-This module provides the server-side APIs, domain models, persistence, preview execution, and report-building services used to define, manage, and run reporting components in UgandaEMR.
+Backend module for the  Report Builder project.  
+This module provides the server-side APIs, domain models, persistence, preview execution, and report-building services used to define, manage, and run reporting components in Report builder app.
 
 ## Overview
 
