@@ -26,173 +26,225 @@ import java.util.Map;
  * The main service of this module, which is exposed for other modules. See
  * moduleApplicationContext.xml on how it is wired up.
  */
+@Transactional
 public interface ReportBuilderService extends OpenmrsService {
 	
 	/** Returns HTML as a string for preview/printing */
-	public String renderHtmlFromJsonTemplate(ReportDesign reportDesign);
+	@Transactional(readOnly = true)
+	String renderHtmlFromJsonTemplate(ReportDesign reportDesign);
 	
 	/** Returns payload JSON as a string (no JsonNode leaks) */
-	public String createPayloadJsonFromTemplate(ReportData reportData, ReportDesign reportDesign, String renderType,
+	@Transactional(readOnly = true)
+	String createPayloadJsonFromTemplate(ReportData reportData, ReportDesign reportDesign, String renderType,
 	        Map<String, Object> flatValues, String remapJsonOptional);
 	
-	public String buildPayloadJson(ReportData reportData, ReportDesign reportDesign, String renderType);
+	@Transactional(readOnly = true)
+	String buildPayloadJson(ReportData reportData, ReportDesign reportDesign, String renderType);
 	
-	public String buildFinalPayloadJson(ReportData reportData, ReportDesign reportDesign, String renderType, Date endDate);
+	@Transactional(readOnly = true)
+	String buildFinalPayloadJson(ReportData reportData, ReportDesign reportDesign, String renderType, Date endDate);
 	
-	public String buildPreviewHtml(ReportData reportData, ReportDesign reportDesign);
+	@Transactional(readOnly = true)
+	String buildPreviewHtml(ReportData reportData, ReportDesign reportDesign);
 	
-	public String buildRenderedOutput(ReportData reportData, ReportDesign reportDesign, String remapJsonOptional);
+	@Transactional(readOnly = true)
+	String buildRenderedOutput(ReportData reportData, ReportDesign reportDesign, String remapJsonOptional);
 	
 	// =========================
 	// Indicator
 	// =========================
+	@Transactional
 	ReportBuilderIndicator saveReportBuilderIndicator(ReportBuilderIndicator indicator);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderIndicator getReportBuilderIndicatorById(Integer id);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderIndicator getReportBuilderIndicatorByUuid(String uuid);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderIndicator getReportBuilderIndicatorByCode(String code);
 	
+	@Transactional(readOnly = true)
 	List<ReportBuilderIndicator> searchReportBuilderIndicators(String q, ReportBuilderIndicator.Kind kind,
 	        boolean includeRetired, Integer startIndex, Integer limit);
 	
-	public List<ReportBuilderIndicator> getAllReportBuilderIndicator(Integer startIndex, Integer limit);
+	@Transactional(readOnly = true)
+	List<ReportBuilderIndicator> getAllReportBuilderIndicator(Integer startIndex, Integer limit);
 	
-	public List<ReportBuilderIndicator> getReportBuilderIndicators(ReportBuilderIndicator.Kind kind, boolean includeRetired,
+	@Transactional(readOnly = true)
+	List<ReportBuilderIndicator> getReportBuilderIndicators(ReportBuilderIndicator.Kind kind, boolean includeRetired,
 	        Integer startIndex, Integer limit);
 	
+	@Transactional(readOnly = true)
 	long getReportBuilderIndicatorsCount(String q, ReportBuilderIndicator.Kind kind, boolean includeRetired);
 	
+	@Transactional
 	void retireReportBuilderIndicator(ReportBuilderIndicator indicator, String reason);
 	
+	@Transactional
 	void unretireReportBuilderIndicator(ReportBuilderIndicator indicator);
 	
+	@Transactional
 	void purgeReportBuilderIndicator(ReportBuilderIndicator indicator);
 	
 	// =========================
 	// Section
 	// =========================
+	@Transactional
 	ReportBuilderSection saveReportBuilderSection(ReportBuilderSection section);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderSection getReportBuilderSectionById(Integer id);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderSection getReportBuilderSectionByUuid(String uuid);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderSection getReportBuilderSectionByCode(String code);
 	
+	@Transactional(readOnly = true)
 	List<ReportBuilderSection> getReportBuilderSections(String q, boolean includeRetired, Integer startIndex, Integer limit);
 	
+	@Transactional(readOnly = true)
 	long getReportBuilderSectionsCount(String q, boolean includeRetired);
 	
+	@Transactional
 	void retireReportBuilderSection(ReportBuilderSection section, String reason);
 	
+	@Transactional
 	void unretireReportBuilderSection(ReportBuilderSection section);
 	
+	@Transactional
 	void purgeReportBuilderSection(ReportBuilderSection section);
 	
 	// =========================
 	// DataTheme
 	// =========================
+	@Transactional
 	ReportBuilderDataTheme saveReportBuilderDataTheme(ReportBuilderDataTheme theme);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderDataTheme getReportBuilderDataThemeById(Integer id);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderDataTheme getReportBuilderDataThemeByUuid(String uuid);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderDataTheme getReportBuilderDataThemeByCode(String code);
 	
+	@Transactional(readOnly = true)
 	List<ReportBuilderDataTheme> getReportBuilderDataThemes(String q, boolean includeRetired, Integer startIndex,
 	        Integer limit);
 	
+	@Transactional(readOnly = true)
 	long getReportBuilderDataThemesCount(String q, boolean includeRetired);
 	
+	@Transactional
 	void retireReportBuilderDataTheme(ReportBuilderDataTheme theme, String reason);
 	
+	@Transactional
 	void unretireReportBuilderDataTheme(ReportBuilderDataTheme theme);
 	
+	@Transactional
 	void purgeReportBuilderDataTheme(ReportBuilderDataTheme theme);
 	
+	@Transactional(readOnly = true)
 	List<String> getETLTables();
 	
-	public List<Map> getETLTableColumns(String tableName);
+	@Transactional(readOnly = true)
+	List<Map> getETLTableColumns(String tableName);
 	
 	// Categories
+	@Transactional
 	ReportBuilderAgeCategory saveAgeCategory(ReportBuilderAgeCategory category);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderAgeCategory getAgeCategoryByUuid(String uuid);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderAgeCategory getAgeCategoryByCode(String code);
 	
+	@Transactional(readOnly = true)
 	List<ReportBuilderAgeCategory> getAgeCategories(String q, boolean includeRetired, Boolean activeOnly,
 	        Integer startIndex, Integer limit);
 	
+	@Transactional(readOnly = true)
 	long getAgeCategoriesCount(String q, boolean includeRetired, Boolean activeOnly);
 	
+	@Transactional
 	void retireAgeCategory(ReportBuilderAgeCategory category, String reason);
 	
+	@Transactional
 	void unretireAgeCategory(ReportBuilderAgeCategory category);
 	
+	@Transactional
 	void purgeAgeCategory(ReportBuilderAgeCategory category);
 	
 	// Groups
+	@Transactional
 	ReportBuilderAgeGroup saveAgeGroup(ReportBuilderAgeGroup group);
 	
+	@Transactional(readOnly = true)
 	ReportBuilderAgeGroup getAgeGroupById(Integer id);
 	
+	@Transactional(readOnly = true)
 	List<ReportBuilderAgeGroup> getAgeGroupsByCategoryUuid(String categoryUuid, Boolean activeOnly);
 	
+	@Transactional(readOnly = true)
 	List<ReportBuilderAgeGroup> getAgeGroupsByCategoryCode(String categoryCode, Boolean activeOnly);
 	
+	@Transactional
 	void purgeAgeGroup(ReportBuilderAgeGroup group);
 	
+	@Transactional(readOnly = true)
 	List<ReportBuilderAgeGroup> getAgeGroups(String q, ReportBuilderAgeCategory category, Boolean activeOnly,
 	        Integer startIndex, Integer limit);
 	
+	@Transactional(readOnly = true)
 	SqlPreviewResult previewSql(String sql, Map<String, Object> params, Integer maxRows);
 	
 	@Transactional
-	public ReportBuilderReport saveReportBuilderReport(ReportBuilderReport report);
+	ReportBuilderReport saveReportBuilderReport(ReportBuilderReport report);
 	
 	@Transactional(readOnly = true)
-	public ReportBuilderReport getReportBuilderReportByUuid(String uuid);
+	ReportBuilderReport getReportBuilderReportByUuid(String uuid);
 	
 	@Transactional(readOnly = true)
-	public List<ReportBuilderReport> getReportBuilderReports(String q, boolean includeRetired, Integer startIndex,
-	        Integer limit);
+	List<ReportBuilderReport> getReportBuilderReports(String q, boolean includeRetired, Integer startIndex, Integer limit);
 	
 	@Transactional
-	public void retireReportBuilderReport(ReportBuilderReport report, String reason);
+	void retireReportBuilderReport(ReportBuilderReport report, String reason);
 	
 	@Transactional
-	public void purgeReportBuilderReport(ReportBuilderReport report);
+	void purgeReportBuilderReport(ReportBuilderReport report);
 	
 	@Transactional
 	CompiledReportArtifacts compileReport(String reportBuilderReportUuid);
 	
 	@Transactional
-	public ReportCategory saveReportCategory(ReportCategory category);
+	ReportCategory saveReportCategory(ReportCategory category);
 	
 	@Transactional(readOnly = true)
-	public ReportCategory getReportCategoryById(Integer id);
+	ReportCategory getReportCategoryById(Integer id);
 	
 	@Transactional(readOnly = true)
-	public ReportCategory getReportCategoryByUuid(String uuid);
+	ReportCategory getReportCategoryByUuid(String uuid);
 	
 	@Transactional(readOnly = true)
-	public List<ReportCategory> getReportCategories(String q, boolean includeRetired, Integer startIndex, Integer limit);
+	List<ReportCategory> getReportCategories(String q, boolean includeRetired, Integer startIndex, Integer limit);
 	
 	@Transactional(readOnly = true)
-	public long getReportCategoriesCount(String q, boolean includeRetired);
+	long getReportCategoriesCount(String q, boolean includeRetired);
 	
 	@Transactional
-	public void retireReportCategory(ReportCategory category, String reason);
+	void retireReportCategory(ReportCategory category, String reason);
 	
 	@Transactional
-	public void unretireReportCategory(ReportCategory category);
+	void unretireReportCategory(ReportCategory category);
 	
 	@Transactional
-	public void purgeReportCategory(ReportCategory category);
+	void purgeReportCategory(ReportCategory category);
 	
 	@Transactional
 	ReportLibrary saveReportLibrary(ReportLibrary reportLibrary);
@@ -234,7 +286,7 @@ public interface ReportBuilderService extends OpenmrsService {
 	void retireETLSource(ETLSource etlSource, String retireReason);
 	
 	@Transactional(readOnly = true)
-	public List<String> getAllowedTablePrefixes();
+	List<String> getAllowedTablePrefixes();
 	
 	class CompiledReportArtifacts {
 		
@@ -278,5 +330,4 @@ public interface ReportBuilderService extends OpenmrsService {
 			this.compiledJson = compiledJson;
 		}
 	}
-	
 }

@@ -70,6 +70,7 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@Transactional
 public class ReportBuilderServiceImpl extends BaseOpenmrsService implements ReportBuilderService {
 	
 	ReportBuilderDAO dao;
