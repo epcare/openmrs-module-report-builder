@@ -1,7 +1,7 @@
 package org.openmrs.module.reportbuilder.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.openmrs.module.reportbuilder.util.data.definition.AggregateDataSetDefinition;
+import org.openmrs.module.reportbuilder.util.data.definition.AggregateReportDataSetDefinition;
 
 import java.io.File;
 import java.io.IOException;
@@ -14,11 +14,11 @@ public class ReportDesignFileUtil {
 	}
 	
 	public static File getReportDesignDirectory() {
-		return AggregateDataSetDefinition.getReportDesignDirectory();
+		return AggregateReportDataSetDefinition.getReportDesignDirectory();
 	}
 	
 	public static File resolveDesignFile(String fileName) {
-		return AggregateDataSetDefinition.resolveReportDesignFile(fileName);
+		return AggregateReportDataSetDefinition.resolveReportDesignFile(fileName);
 	}
 	
 	public static File writeJsonToDesignFile(String fileName, Object payload) throws IOException {

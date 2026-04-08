@@ -6,7 +6,7 @@ import org.openmrs.annotation.Handler;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
 import org.openmrs.module.reportbuilder.model.ValueHolder;
 import org.openmrs.module.reportbuilder.util.PatientDataHelper;
-import org.openmrs.module.reportbuilder.util.data.definition.AggregateDataSetDefinition;
+import org.openmrs.module.reportbuilder.util.data.definition.AggregateReportDataSetDefinition;
 import org.openmrs.module.reporting.common.DateUtil;
 import org.openmrs.module.reporting.dataset.DataSetRow;
 import org.openmrs.module.reporting.dataset.SimpleDataSet;
@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-@Handler(supports = { AggregateDataSetDefinition.class })
+@Handler(supports = { AggregateReportDataSetDefinition.class })
 public class AggregateDataSetEvaluator implements DataSetEvaluator {
 	
 	@Autowired
@@ -35,7 +35,7 @@ public class AggregateDataSetEvaluator implements DataSetEvaluator {
 	@Override
 	public SimpleDataSet evaluate(DataSetDefinition dataSetDefinition, EvaluationContext evaluationContext)
 	        throws EvaluationException {
-		AggregateDataSetDefinition definition = (AggregateDataSetDefinition) dataSetDefinition;
+		AggregateReportDataSetDefinition definition = (AggregateReportDataSetDefinition) dataSetDefinition;
 		
 		SimpleDataSet dataSet = new SimpleDataSet(definition, evaluationContext);
 		DataSetRow row = getReportQuery(definition, evaluationContext);
@@ -49,7 +49,7 @@ public class AggregateDataSetEvaluator implements DataSetEvaluator {
 		return evaluationService.evaluateToList(query, context);
 	}
 	
-	private DataSetRow getReportQuery(AggregateDataSetDefinition definition, EvaluationContext evaluationContext) {
+	private DataSetRow getReportQuery(AggregateReportDataSetDefinition definition, EvaluationContext evaluationContext) {
 		DataSetRow row = new DataSetRow();
 		
 		Date startDateValue = resolveDateParameter(evaluationContext, "startDate", definition.getStartDate());

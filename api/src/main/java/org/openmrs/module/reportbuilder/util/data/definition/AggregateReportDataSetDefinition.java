@@ -9,7 +9,7 @@ import org.openmrs.util.OpenmrsUtil;
 import java.io.File;
 import java.util.Date;
 
-public class AggregateDataSetDefinition extends BaseDataSetDefinition {
+public class AggregateReportDataSetDefinition extends BaseDataSetDefinition {
 	
 	public static final String REPORTS_PATH = "configuration/reportbuilder";
 	
@@ -32,11 +32,11 @@ public class AggregateDataSetDefinition extends BaseDataSetDefinition {
 	@ConfigurationProperty
 	private File reportDesign;
 	
-	public AggregateDataSetDefinition() {
+	public AggregateReportDataSetDefinition() {
 		super();
 	}
 	
-	public AggregateDataSetDefinition(String name, String description) {
+	public AggregateReportDataSetDefinition(String name, String description) {
 		super(name, description);
 	}
 	

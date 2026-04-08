@@ -32,7 +32,7 @@ import org.openmrs.module.reportbuilder.util.IndicatorSqlSync;
 import org.openmrs.module.reportbuilder.util.IndicatorValidator;
 import org.openmrs.module.reportbuilder.util.ReportDesignFileUtil;
 import org.openmrs.module.reportbuilder.util.ReportDesignHtmlRenderer;
-import org.openmrs.module.reportbuilder.util.data.definition.AggregateDataSetDefinition;
+import org.openmrs.module.reportbuilder.util.data.definition.AggregateReportDataSetDefinition;
 import org.openmrs.module.reporting.common.DateUtil;
 import org.openmrs.module.reporting.common.MessageUtil;
 import org.openmrs.module.reporting.common.ObjectUtil;
@@ -797,7 +797,7 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			
 			ReportDefinition reportDefinition = findOrCreateReportDefinition(report, reportDefinitionService);
 			
-			AggregateDataSetDefinition dsd = new AggregateDataSetDefinition();
+			AggregateReportDataSetDefinition dsd = new AggregateReportDataSetDefinition();
 			dsd.setName(report.getName() + " Data Set");
 			dsd.setDescription(report.getDescription());
 			dsd.setReportDesign(definitionFile);
