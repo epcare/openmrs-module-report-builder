@@ -4,9 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.openmrs.annotation.Handler;
 import org.openmrs.api.db.hibernate.DbSessionFactory;
-import org.openmrs.module.reportbuilder.model.ValueHolder;
-import org.openmrs.module.reportbuilder.util.PatientDataHelper;
-import org.openmrs.module.reportbuilder.util.data.definition.AggregateDataSetDefinition;
 import org.openmrs.module.reporting.common.DateUtil;
 import org.openmrs.module.reporting.dataset.DataSetRow;
 import org.openmrs.module.reporting.dataset.SimpleDataSet;
@@ -16,6 +13,9 @@ import org.openmrs.module.reporting.evaluation.EvaluationContext;
 import org.openmrs.module.reporting.evaluation.EvaluationException;
 import org.openmrs.module.reporting.evaluation.querybuilder.SqlQueryBuilder;
 import org.openmrs.module.reporting.evaluation.service.EvaluationService;
+import org.openmrs.module.reportbuilder.model.ValueHolder;
+import org.openmrs.module.reportbuilder.util.PatientDataHelper;
+import org.openmrs.module.reportbuilder.util.data.definition.AggregateDataSetDefinition;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.File;
@@ -24,7 +24,7 @@ import java.util.Date;
 import java.util.List;
 
 @Handler(supports = { AggregateDataSetDefinition.class })
-public class AggregateDataSetEvaluator implements DataSetEvaluator {
+public class AggregateReportDataSetEvaluator implements DataSetEvaluator {
 	
 	@Autowired
 	private EvaluationService evaluationService;

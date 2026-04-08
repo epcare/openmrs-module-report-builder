@@ -11,6 +11,7 @@ package org.openmrs.module.reportbuilder.api;
 
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.reportbuilder.dto.SqlPreviewResult;
+import org.openmrs.module.reportbuilder.legacyconfig.importer.ReportImportResult;
 import org.openmrs.module.reportbuilder.model.*;
 import org.openmrs.module.reporting.report.ReportData;
 import org.openmrs.module.reporting.report.ReportDesign;
@@ -330,4 +331,19 @@ public interface ReportBuilderService extends OpenmrsService {
 			this.compiledJson = compiledJson;
 		}
 	}
+	
+	public ReportImportResult importLegacyReportPackage(File reportDir) throws Exception;
+	
+	public List<ReportImportResult> importAllLegacyReportPackages(File legacyReportsRootDir) throws Exception;
+	
+	public ReportImportResult validateLegacyReportPackage(File reportDir) throws Exception;
+	
+	ReportImportResult importRuntimeLegacyReportPackage(String reportKey) throws Exception;
+	
+	ReportImportResult validateRuntimeLegacyReportPackage(String reportKey) throws Exception;
+	
+	List<ReportImportResult> importAllRuntimeLegacyReportPackages() throws Exception;
+	
+	void ensureImportAllLegacyReportsTaskExists();
+	
 }

@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.reportbuilder;
 
+import org.openmrs.api.context.Context;
+import org.openmrs.module.reportbuilder.api.ReportBuilderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.openmrs.module.BaseModuleActivator;
@@ -24,6 +26,14 @@ public class ReportBuilderActivator extends BaseModuleActivator {
 	 * @see #started()
 	 */
 	public void started() {
+		
+		try {
+			Context.getService(ReportBuilderService.class).ensureImportAllLegacyReportsTaskExists();
+		}
+		catch (Exception e) {
+			log.error("Failed to ensure Import All Legacy Reports task exists", e);
+		}
+		
 		log.info("Started Report Builder");
 	}
 	

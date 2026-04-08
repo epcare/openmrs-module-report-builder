@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Dataset Config",
+  "type": "object",
+  "required": ["type", "name", "columns"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["cohortIndicator"]
+    },
+    "name": { "type": "string" },
+    "parametersRef": { "type": "string" },
+    "parameters": {
+      "type": "array",
+      "items": { "$ref": "parameter.schema.json" }
+    },
+    "dimensions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/dimensionRef" }
+    },
+    "columns": {
+      "type": "array",
+      "items": { "$ref": "column.schema.json" }
+    }
+  },
+  "$defs": {
+    "dimensionRef": {
+      "type": "object",
+      "required": ["key", "ref"],
+      "properties": {
+        "key": { "type": "string" },
+        "ref": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Design Config",
+  "type": "object",
+  "required": ["uuid", "type", "template"],
+  "properties": {
+    "uuid": { "type": "string" },
+    "name": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": ["excel", "json"]
+    },
+    "template": { "type": "string" }
+  }
+}
