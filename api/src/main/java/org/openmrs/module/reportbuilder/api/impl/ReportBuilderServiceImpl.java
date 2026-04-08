@@ -14,7 +14,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.openmrs.api.APIException;
-import org.openmrs.api.UserService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.reportbuilder.api.ReportBuilderService;
@@ -74,8 +73,6 @@ import java.util.regex.Pattern;
 public class ReportBuilderServiceImpl extends BaseOpenmrsService implements ReportBuilderService {
 	
 	ReportBuilderDAO dao;
-	
-	UserService userService;
 	
 	public void setDao(ReportBuilderDAO dao) {
 		this.dao = dao;
