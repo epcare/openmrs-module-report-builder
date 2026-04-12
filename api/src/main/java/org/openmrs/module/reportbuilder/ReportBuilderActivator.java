@@ -9,29 +9,44 @@
  */
 package org.openmrs.module.reportbuilder;
 
+import org.openmrs.api.context.Context;
+import org.openmrs.module.BaseModuleActivator;
+import org.openmrs.module.reportbuilder.legacyconfig.LegacyReportImportService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.openmrs.module.BaseModuleActivator;
 
 /**
  * This class contains the logic that is run every time this module is either started or shutdown
  */
 public class ReportBuilderActivator extends BaseModuleActivator {
-	
+
 	private static final Logger log = LoggerFactory.getLogger(ReportBuilderActivator.class);
-	
+
 	/**
 	 * @see #started()
 	 */
 	public void started() {
 		log.info("Started Report Builder");
+
+		try {
+			// Import legacy reports on startup
+			LegacyReportImportService legacyImportService = Context.getService(LegacyReportImportService.class);
+			if (legacyImportService != null) {
+				log.info("Importing legacy UgandaEMRReports...");
+				legacyImportService.ensureLegacyReportsImported();
+				log.info("Legacy report import completed");
+			}
+		} catch (Exception e) {
+			log.error("Error during legacy report import", e);
+			// Don't fail module startup if legacy import fails
+		}
 	}
-	
+
 	/**
 	 * @see #shutdown()
 	 */
 	public void shutdown() {
 		log.info("Shutdown Report Builder");
 	}
-	
+
 }
