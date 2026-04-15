@@ -19,26 +19,41 @@ import org.openmrs.api.impl.BaseOpenmrsService;
 import org.openmrs.module.reportbuilder.api.ReportBuilderService;
 import org.openmrs.module.reportbuilder.api.db.ReportBuilderDAO;
 import org.openmrs.module.reportbuilder.dto.SqlPreviewResult;
-import org.openmrs.module.reportbuilder.model.ETLSource;
-import org.openmrs.module.reportbuilder.model.ReportBuilderAgeCategory;
-import org.openmrs.module.reportbuilder.model.ReportBuilderAgeGroup;
-import org.openmrs.module.reportbuilder.model.ReportBuilderDataTheme;
-import org.openmrs.module.reportbuilder.model.ReportBuilderIndicator;
-import org.openmrs.module.reportbuilder.model.ReportBuilderReport;
-import org.openmrs.module.reportbuilder.model.ReportBuilderSection;
-import org.openmrs.module.reportbuilder.model.ReportCategory;
-import org.openmrs.module.reportbuilder.model.ReportLibrary;
+import org.openmrs.module.reportbuilder.legacyconfig.builder.CohortDefinitionFactory;
+import org.openmrs.module.reportbuilder.legacyconfig.builder.DatasetDefinitionFactory;
+import org.openmrs.module.reportbuilder.legacyconfig.builder.DesignBuilder;
+import org.openmrs.module.reportbuilder.legacyconfig.builder.ParameterBuilder;
+import org.openmrs.module.reportbuilder.legacyconfig.builder.ReportDefinitionFactory;
+import org.openmrs.module.reportbuilder.legacyconfig.generic.GenericReportImportService;
+import org.openmrs.module.reportbuilder.legacyconfig.importer.ReportImportResult;
+import org.openmrs.module.reportbuilder.legacyconfig.LegacyReportImporter;
+import org.openmrs.module.reportbuilder.legacyconfig.model.CohortConfig;
+import org.openmrs.module.reportbuilder.legacyconfig.model.DatasetConfig;
+import org.openmrs.module.reportbuilder.legacyconfig.model.DatasetRefConfig;
+import org.openmrs.module.reportbuilder.legacyconfig.model.DesignConfig;
+import org.openmrs.module.reportbuilder.legacyconfig.model.DesignRefConfig;
+import org.openmrs.module.reportbuilder.legacyconfig.model.ParameterConfig;
+import org.openmrs.module.reportbuilder.legacyconfig.model.ParameterSetConfig;
+import org.openmrs.module.reportbuilder.legacyconfig.model.ReportConfig;
+import org.openmrs.module.reportbuilder.legacyconfig.parser.JsonConfigParser;
+import org.openmrs.module.reportbuilder.legacyconfig.resolver.ReferenceResolver;
+import org.openmrs.module.reportbuilder.legacyconfig.validator.ConfigValidator;
+import org.openmrs.module.reportbuilder.model.*;
 import org.openmrs.module.reportbuilder.util.IndicatorSqlSync;
 import org.openmrs.module.reportbuilder.util.IndicatorValidator;
 import org.openmrs.module.reportbuilder.util.ReportDesignFileUtil;
 import org.openmrs.module.reportbuilder.util.ReportDesignHtmlRenderer;
 import org.openmrs.module.reportbuilder.util.data.definition.AggregateReportDataSetDefinition;
+import org.openmrs.module.reportbuilder.validation.ReportValidationResult;
 import org.openmrs.module.reporting.common.DateUtil;
 import org.openmrs.module.reporting.common.MessageUtil;
 import org.openmrs.module.reporting.common.ObjectUtil;
+import org.openmrs.module.reporting.cohort.definition.CohortDefinition;
 import org.openmrs.module.reporting.dataset.DataSet;
 import org.openmrs.module.reporting.dataset.DataSetRow;
+import org.openmrs.module.reporting.dataset.definition.DataSetDefinition;
 import org.openmrs.module.reporting.evaluation.EvaluationUtil;
+import org.openmrs.module.reporting.evaluation.parameter.Mapped;
 import org.openmrs.module.reporting.evaluation.parameter.Parameter;
 import org.openmrs.module.reporting.report.ReportData;
 import org.openmrs.module.reporting.report.ReportDesign;
@@ -50,6 +65,9 @@ import org.openmrs.module.reporting.report.renderer.TextTemplateRenderer;
 import org.openmrs.module.reporting.report.renderer.template.TemplateEngine;
 import org.openmrs.module.reporting.report.renderer.template.TemplateEngineManager;
 import org.openmrs.module.reporting.report.service.ReportService;
+import org.openmrs.util.OpenmrsUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
@@ -58,6 +76,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
@@ -72,15 +91,33 @@ import java.util.regex.Pattern;
 @Transactional
 public class ReportBuilderServiceImpl extends BaseOpenmrsService implements ReportBuilderService {
 	
-	ReportBuilderDAO dao;
+	private static final Logger log = LoggerFactory.getLogger(ReportBuilderServiceImpl.class);
 	
-	public void setDao(ReportBuilderDAO dao) {
-		this.dao = dao;
-	}
+	private ReportBuilderDAO dao;
 	
 	private final ReportDesignHtmlRenderer reportDesignHtmlRenderer = new ReportDesignHtmlRenderer();
 	
 	private final ObjectMapper objectMapper = new ObjectMapper();
+	
+	private JsonConfigParser legacyConfigParser;
+	
+	private ReferenceResolver legacyReferenceResolver;
+	
+	private ParameterBuilder legacyParameterBuilder;
+	
+	private CohortDefinitionFactory legacyCohortDefinitionFactory;
+	
+	private DatasetDefinitionFactory legacyDatasetDefinitionFactory;
+	
+	private ReportDefinitionFactory legacyReportDefinitionFactory;
+	
+	private DesignBuilder legacyDesignBuilder;
+	
+	private ConfigValidator legacyConfigValidator;
+	
+	public void setDao(ReportBuilderDAO dao) {
+		this.dao = dao;
+	}
 	
 	public String renderHtmlFinalFromTemplate(ReportData reportData, ReportDesign reportDesign) {
 		String templateJson = readDesignResource(reportDesign);
@@ -638,7 +675,12 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		if (report.getUuid() == null) {
 			report.setUuid(UUID.randomUUID().toString());
 		}
-		return dao.saveReportBuilderReport(report);
+		ReportBuilderReport savedReport = dao.saveReportBuilderReport(report);
+		
+		// Automatically add to report library
+		addToReportLibrary(savedReport);
+		
+		return savedReport;
 	}
 	
 	@Override
@@ -1581,6 +1623,87 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		dao.purgeReportLibrary(reportLibrary);
 	}
 	
+	/**
+	 * Automatically add a report builder report to the report library
+	 */
+	private void addToReportLibrary(ReportBuilderReport report) {
+		try {
+			// Check if library entry already exists for this report
+			ReportLibrary existingEntry = dao.getReportLibraryByBuilderReportUuid(report.getUuid());
+			
+			if (existingEntry != null) {
+				// Update existing entry
+				existingEntry.setName(report.getName());
+				existingEntry.setDescription(report.getDescription());
+				existingEntry.setCode(report.getCode());
+				existingEntry.setCategory(report.getCategory());
+				existingEntry.setReportType(report.getReportType());
+				existingEntry.setRetired(report.getRetired());
+				dao.saveReportLibrary(existingEntry);
+				log.debug("Updated report library entry for report: {}", report.getName());
+			} else {
+				// Create new library entry
+				ReportLibrary libraryEntry = new ReportLibrary();
+				libraryEntry.setUuid(UUID.randomUUID().toString());
+				libraryEntry.setName(report.getName());
+				libraryEntry.setDescription(report.getDescription());
+				libraryEntry.setCode(report.getCode());
+				libraryEntry.setSourceType(ReportLibrary.ReportSourceType.BUILDER);
+				libraryEntry.setReportBuilderReportUuid(report.getUuid());
+				libraryEntry.setCategory(report.getCategory());
+				libraryEntry.setReportType(report.getReportType());
+				libraryEntry.setMigrated(false);
+				libraryEntry.setRetired(report.getRetired());
+				dao.saveReportLibrary(libraryEntry);
+				log.debug("Added report to library: {}", report.getName());
+			}
+		}
+		catch (Exception e) {
+			log.error("Failed to add report to library: {}", report.getName(), e);
+			// Don't throw exception to prevent breaking the save operation
+		}
+	}
+	
+	/**
+	 * Add a generic report to the report library
+	 */
+	public void addGenericReportToLibrary(String reportDefinitionUuid, String name, String description, String code,
+	        ReportCategory category, ReportBuilderReport.ReportType reportType) {
+		try {
+			// Check if library entry already exists for this report definition
+			ReportLibrary existingEntry = dao.getReportLibraryByReportDefinitionUuid(reportDefinitionUuid);
+			
+			if (existingEntry != null) {
+				// Update existing entry
+				existingEntry.setName(name);
+				existingEntry.setDescription(description);
+				existingEntry.setCode(code);
+				existingEntry.setCategory(category);
+				existingEntry.setReportType(reportType);
+				dao.saveReportLibrary(existingEntry);
+				log.debug("Updated report library entry for generic report: {}", name);
+			} else {
+				// Create new library entry
+				ReportLibrary libraryEntry = new ReportLibrary();
+				libraryEntry.setUuid(UUID.randomUUID().toString());
+				libraryEntry.setName(name);
+				libraryEntry.setDescription(description);
+				libraryEntry.setCode(code);
+				libraryEntry.setSourceType(ReportLibrary.ReportSourceType.LEGACY);
+				libraryEntry.setReportDefinitionUuid(reportDefinitionUuid);
+				libraryEntry.setCategory(category);
+				libraryEntry.setReportType(reportType);
+				libraryEntry.setMigrated(true);
+				dao.saveReportLibrary(libraryEntry);
+				log.debug("Added generic report to library: {}", name);
+			}
+		}
+		catch (Exception e) {
+			log.error("Failed to add generic report to library: {}", name, e);
+			// Don't throw exception to prevent breaking the import operation
+		}
+	}
+	
 	@Override
 	@Transactional
 	public ETLSource saveETLSource(ETLSource etlSource) {
@@ -1635,5 +1758,1020 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		}
 		
 		return prefixes;
+	}
+	
+	@Override
+	public ReportImportResult importLegacyReportPackage(File reportFile) throws Exception {
+		File legacyRootDir = resolveLegacyRootFromReportFile(reportFile);
+		return doImportLegacyReportPackage(legacyRootDir, reportFile, false);
+	}
+	
+	@Override
+	public ReportImportResult validateLegacyReportPackage(File reportFile) throws Exception {
+		File legacyRootDir = resolveLegacyRootFromReportFile(reportFile);
+		return doImportLegacyReportPackage(legacyRootDir, reportFile, true);
+	}
+	
+	@Override
+	public List<ReportImportResult> importAllLegacyReportPackages(File legacyReportsRootDir) throws Exception {
+		validateDirectory(legacyReportsRootDir, "Legacy reports root directory");
+		
+		File reportsDir = new File(legacyReportsRootDir, "reports");
+		validateDirectory(reportsDir, "Legacy reports directory");
+		
+		List<ReportImportResult> results = new ArrayList<ReportImportResult>();
+		
+		File[] reportFiles = reportsDir.listFiles(new java.io.FilenameFilter() {
+			
+			@Override
+			public boolean accept(File dir, String name) {
+				return name != null && name.toLowerCase().endsWith(".json");
+			}
+		});
+		
+		if (reportFiles == null || reportFiles.length == 0) {
+			return results;
+		}
+		
+		Arrays.sort(reportFiles, new Comparator<File>() {
+			
+			@Override
+			public int compare(File f1, File f2) {
+				return f1.getName().compareTo(f2.getName());
+			}
+		});
+		
+		int i;
+		for (i = 0; i < reportFiles.length; i++) {
+			results.add(doImportLegacyReportPackage(legacyReportsRootDir, reportFiles[i], false));
+		}
+		
+		return results;
+	}
+	
+	@Override
+	public ReportImportResult importRuntimeLegacyReportPackage(String reportKey) throws Exception {
+		File legacyRootDir = resolveRuntimeLegacyReportsRootDirectory();
+		File reportFile = resolveRuntimeReportFile(legacyRootDir, reportKey);
+		return doImportLegacyReportPackage(legacyRootDir, reportFile, false);
+	}
+	
+	@Override
+	public ReportImportResult validateRuntimeLegacyReportPackage(String reportKey) throws Exception {
+		File legacyRootDir = resolveRuntimeLegacyReportsRootDirectory();
+		File reportFile = resolveRuntimeReportFile(legacyRootDir, reportKey);
+		return doImportLegacyReportPackage(legacyRootDir, reportFile, true);
+	}
+	
+	@Override
+	public List<ReportImportResult> importAllRuntimeLegacyReportPackages() throws Exception {
+		File legacyRootDir = resolveRuntimeLegacyReportsRootDirectory();
+		return importAllLegacyReportPackages(legacyRootDir);
+	}
+	
+	private ReportImportResult doImportLegacyReportPackage(File legacyRootDir, File reportFile, boolean validateOnly)
+	        throws Exception {
+		validateDirectory(legacyRootDir, "Legacy reports root directory");
+		
+		if (reportFile == null || !reportFile.exists() || !reportFile.isFile()) {
+			throw new IllegalArgumentException("Legacy report file not found: "
+			        + (reportFile == null ? "null" : reportFile.getAbsolutePath()));
+		}
+		
+		ReportImportResult result = new ReportImportResult();
+		
+		ReportConfig reportConfig = loadLegacyReportConfig(reportFile);
+		legacyConfigValidator.validateReportConfig(reportConfig);
+		result.setReportName(reportConfig.getName());
+		
+		List<Parameter> parameters = buildLegacyParameters(legacyRootDir, reportConfig);
+		Map<String, CohortDefinition> builtCohorts = buildLegacyCohorts(legacyRootDir, parameters);
+		Map<String, DataSetDefinition> datasets = buildLegacyDatasets(legacyRootDir, reportConfig, parameters, builtCohorts);
+		
+		ReportDefinition reportDefinition = buildLegacyReportDefinition(reportConfig, parameters, datasets);
+		
+		if (!validateOnly) {
+			reportDefinition = saveLegacyReportDefinition(reportDefinition);
+			saveLegacyReportDesigns(legacyRootDir, reportConfig, reportDefinition);
+			saveLegacyReportEntity(reportConfig, reportDefinition);
+		}
+		
+		result.addMessage((validateOnly ? "Validated" : "Imported") + " legacy report package: " + reportConfig.getName());
+		result.addMessage("Report file: " + reportFile.getName());
+		result.addMessage("Datasets: " + datasets.size());
+		result.addMessage("Cohorts: " + builtCohorts.size());
+		result.addMessage("Mode: " + (validateOnly ? "VALIDATE_ONLY" : "IMPORT"));
+		
+		return result;
+	}
+	
+	private ReportConfig loadLegacyReportConfig(File reportFile) throws Exception {
+		if (reportFile == null || !reportFile.exists() || !reportFile.isFile()) {
+			throw new IllegalArgumentException("Legacy report file not found: "
+			        + (reportFile == null ? "null" : reportFile.getAbsolutePath()));
+		}
+		return legacyConfigParser.parse(reportFile, ReportConfig.class);
+	}
+	
+	private List<Parameter> buildLegacyParameters(File legacyRootDir, ReportConfig reportConfig) throws Exception {
+		List<Parameter> parameters = new ArrayList<Parameter>();
+		
+		if (hasText(reportConfig.getParametersRef())) {
+			ParameterSetConfig parameterSet = legacyReferenceResolver.resolveParameterSet(legacyRootDir,
+			    reportConfig.getParametersRef());
+			
+			if (parameterSet.getParameters() != null) {
+				int i;
+				for (i = 0; i < parameterSet.getParameters().size(); i++) {
+					ParameterConfig pc = parameterSet.getParameters().get(i);
+					parameters.add(legacyParameterBuilder.build(pc));
+				}
+			}
+		} else if (reportConfig.getParameters() != null) {
+			int i;
+			for (i = 0; i < reportConfig.getParameters().size(); i++) {
+				ParameterConfig pc = reportConfig.getParameters().get(i);
+				parameters.add(legacyParameterBuilder.build(pc));
+			}
+		}
+		
+		return parameters;
+	}
+	
+	private Map<String, CohortDefinition> buildLegacyCohorts(File legacyRootDir, List<Parameter> parameters)
+	        throws Exception {
+		Map<String, CohortDefinition> builtCohorts = new LinkedHashMap<String, CohortDefinition>();
+		
+		File cohortsDir = new File(legacyRootDir, "cohorts");
+		if (!cohortsDir.exists()) {
+			return builtCohorts;
+		}
+		
+		validateDirectory(cohortsDir, "Cohorts directory");
+		
+		File[] files = cohortsDir.listFiles(new java.io.FilenameFilter() {
+			
+			@Override
+			public boolean accept(File dir, String name) {
+				return name != null && name.endsWith(".json");
+			}
+		});
+		
+		if (files == null || files.length == 0) {
+			return builtCohorts;
+		}
+		
+		Arrays.sort(files, new Comparator<File>() {
+			
+			@Override
+			public int compare(File f1, File f2) {
+				String n1 = f1 == null ? null : f1.getName();
+				String n2 = f2 == null ? null : f2.getName();
+				
+				if (n1 == null && n2 == null) {
+					return 0;
+				}
+				if (n1 == null) {
+					return -1;
+				}
+				if (n2 == null) {
+					return 1;
+				}
+				return n1.compareTo(n2);
+			}
+		});
+		
+		int i;
+		for (i = 0; i < files.length; i++) {
+			File file = files[i];
+			Map<String, CohortConfig> cohortMap = legacyReferenceResolver.resolveCohortMap(file);
+			
+			for (Map.Entry<String, CohortConfig> entry : cohortMap.entrySet()) {
+				String refKey = buildCohortRefKey(file, entry.getKey());
+				CohortDefinition definition = legacyCohortDefinitionFactory.build(entry.getKey(), entry.getValue(),
+				    builtCohorts, parameters);
+				builtCohorts.put(refKey, definition);
+			}
+		}
+		
+		return builtCohorts;
+	}
+	
+	private Map<String, DataSetDefinition> buildLegacyDatasets(File legacyRootDir, ReportConfig reportConfig,
+	        List<Parameter> parameters, Map<String, CohortDefinition> builtCohorts) throws Exception {
+		
+		Map<String, DataSetDefinition> datasets = new LinkedHashMap<String, DataSetDefinition>();
+		
+		if (reportConfig.getDatasets() == null || reportConfig.getDatasets().isEmpty()) {
+			return datasets;
+		}
+		
+		int i;
+		for (i = 0; i < reportConfig.getDatasets().size(); i++) {
+			DatasetRefConfig datasetRef = reportConfig.getDatasets().get(i);
+			
+			DatasetConfig datasetConfig;
+			if (datasetRef.isInlineDefinition()) {
+				datasetConfig = datasetRef;
+			} else {
+				File datasetFile = requireFile(legacyRootDir, datasetRef.getFile());
+				datasetConfig = legacyConfigParser.parse(datasetFile, DatasetConfig.class);
+			}
+			
+			legacyConfigValidator.validateDatasetConfig(datasetConfig);
+			DataSetDefinition dsd = legacyDatasetDefinitionFactory.build(datasetConfig, parameters, builtCohorts);
+			datasets.put(datasetRef.getKey(), dsd);
+		}
+		
+		return datasets;
+	}
+	
+	private ReportDefinition buildLegacyReportDefinition(ReportConfig reportConfig, List<Parameter> parameters,
+	        Map<String, DataSetDefinition> datasets) {
+		return legacyReportDefinitionFactory.build(reportConfig, parameters, datasets);
+	}
+	
+	private ReportDefinition saveLegacyReportDefinition(ReportDefinition reportDefinition) {
+		ReportDefinitionService reportDefinitionService = Context.getService(ReportDefinitionService.class);
+		
+		if (reportDefinition == null) {
+			throw new IllegalArgumentException("Report definition is required");
+		}
+		
+		if (hasText(reportDefinition.getUuid())) {
+			ReportDefinition existing = reportDefinitionService.getDefinitionByUuid(reportDefinition.getUuid());
+			if (existing != null) {
+				existing.setName(reportDefinition.getName());
+				existing.setDescription(reportDefinition.getDescription());
+				
+				existing.getParameters().clear();
+				if (reportDefinition.getParameters() != null) {
+					int i;
+					for (i = 0; i < reportDefinition.getParameters().size(); i++) {
+						existing.addParameter(reportDefinition.getParameters().get(i));
+					}
+				}
+				
+				existing.getDataSetDefinitions().clear();
+				Map<String, Mapped<? extends DataSetDefinition>> mappings = reportDefinition.getDataSetDefinitions();
+				if (mappings != null) {
+					for (Map.Entry<String, Mapped<? extends DataSetDefinition>> e : mappings.entrySet()) {
+						existing.getDataSetDefinitions().put(e.getKey(), e.getValue());
+					}
+				}
+				
+				return reportDefinitionService.saveDefinition(existing);
+			}
+		}
+		
+		return reportDefinitionService.saveDefinition(reportDefinition);
+	}
+	
+	private void saveLegacyReportDesigns(File legacyRootDir, ReportConfig reportConfig, ReportDefinition reportDefinition)
+	        throws Exception {
+		List<ReportDesign> designs = legacyDesignBuilder.build(reportConfig, reportDefinition, legacyRootDir);
+		if (designs == null || designs.isEmpty()) {
+			return;
+		}
+		
+		ReportService reportService = Context.getService(ReportService.class);
+		
+		int i;
+		for (i = 0; i < designs.size(); i++) {
+			reportService.saveReportDesign(designs.get(i));
+		}
+	}
+	
+	private void saveLegacyReportEntity(ReportConfig reportConfig, ReportDefinition reportDefinition) throws Exception {
+		try {
+			// Check if a legacy report with this UUID already exists
+			LegacyReport existing = dao.getLegacyReportByUuid(reportConfig.getUuid());
+			if (existing != null) {
+				// Update existing record
+				existing.setName(reportConfig.getName());
+				existing.setDescription(reportConfig.getDescription());
+				existing.setVersion(null); // ReportConfig doesn't have version
+				existing.setCategory(null); // ReportConfig doesn't have category
+				existing.setSubcategory(null); // ReportConfig doesn't have subcategory
+				existing.setReportType(null); // ReportConfig doesn't have reportType
+				existing.setReportYear(null); // ReportConfig doesn't have reportYear
+				existing.setReportScope(null); // ReportConfig doesn't have reportScope
+				existing.setStatus("ACTIVE");
+				existing.setDateChanged(new java.util.Date());
+				
+				// Update the JSON config
+				com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+				String configJson = mapper.writeValueAsString(reportConfig);
+				existing.setConfigJson(configJson);
+				
+				dao.saveLegacyReport(existing);
+			} else {
+				// Create new legacy report record
+				LegacyReport legacyReport = new LegacyReport();
+				legacyReport.setUuid(reportConfig.getUuid());
+				legacyReport.setName(reportConfig.getName());
+				legacyReport.setDescription(reportConfig.getDescription());
+				legacyReport.setVersion(null); // ReportConfig doesn't have version
+				legacyReport.setCategory(null); // ReportConfig doesn't have category
+				legacyReport.setSubcategory(null); // ReportConfig doesn't have subcategory
+				legacyReport.setReportType(null); // ReportConfig doesn't have reportType
+				legacyReport.setReportYear(null); // ReportConfig doesn't have reportYear
+				legacyReport.setReportScope(null); // ReportConfig doesn't have reportScope
+				legacyReport.setStatus("ACTIVE");
+				
+				// Convert the ReportConfig to JSON and store it
+				com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+				String configJson = mapper.writeValueAsString(reportConfig);
+				legacyReport.setConfigJson(configJson);
+				
+				dao.saveLegacyReport(legacyReport);
+			}
+		}
+		catch (Exception e) {
+			// Log error but don't fail the import
+			System.err.println("Error saving legacy report entity: " + e.getMessage());
+			e.printStackTrace();
+		}
+	}
+	
+	private File resolveRuntimeLegacyReportsRootDirectory() {
+		String appDataDir = OpenmrsUtil.getApplicationDataDirectory();
+		if (appDataDir == null || appDataDir.trim().length() == 0) {
+			throw new IllegalArgumentException("Global property application_data_directory is not set");
+		}
+		
+		File root = new File(appDataDir, "configuration/reports/legacy");
+		validateDirectory(root, "Runtime legacy reports root directory");
+		return root;
+	}
+	
+	private File resolveRuntimeReportFile(File legacyRootDir, String reportKey) {
+		if (!hasText(reportKey)) {
+			throw new IllegalArgumentException("Report key is required");
+		}
+		
+		File reportsDir = new File(legacyRootDir, "reports");
+		validateDirectory(reportsDir, "Runtime legacy reports directory");
+		
+		String trimmedKey = reportKey.trim();
+		File reportFile = new File(reportsDir, trimmedKey);
+		
+		if (!reportFile.exists() || !reportFile.isFile()) {
+			reportFile = new File(reportsDir, trimmedKey + ".json");
+		}
+		
+		if (!reportFile.exists() || !reportFile.isFile()) {
+			throw new IllegalArgumentException("Runtime legacy report file not found for key: " + reportKey);
+		}
+		
+		return reportFile;
+	}
+	
+	private File resolveLegacyRootFromReportFile(File reportFile) {
+		if (reportFile == null || !reportFile.exists() || !reportFile.isFile()) {
+			throw new IllegalArgumentException("Legacy report file not found: "
+			        + (reportFile == null ? "null" : reportFile.getAbsolutePath()));
+		}
+		
+		File reportsDir = reportFile.getParentFile();
+		if (reportsDir == null || !"reports".equals(reportsDir.getName())) {
+			throw new IllegalArgumentException("Report file must be inside a legacy/reports directory: "
+			        + reportFile.getAbsolutePath());
+		}
+		
+		File legacyRootDir = reportsDir.getParentFile();
+		if (legacyRootDir == null) {
+			throw new IllegalArgumentException("Cannot resolve legacy root from report file: "
+			        + reportFile.getAbsolutePath());
+		}
+		
+		return legacyRootDir;
+	}
+	
+	private String buildCohortRefKey(File cohortFile, String key) {
+		return "cohorts/" + stripJsonExtension(cohortFile.getName()) + "#" + key;
+	}
+	
+	private String stripJsonExtension(String filename) {
+		if (filename == null || !filename.endsWith(".json")) {
+			return filename;
+		}
+		return filename.substring(0, filename.length() - 5);
+	}
+	
+	private File requireFile(File baseDir, String relativePath) {
+		File file = new File(baseDir, relativePath);
+		if (!file.exists() || !file.isFile()) {
+			throw new IllegalArgumentException("Required file not found: " + file.getAbsolutePath());
+		}
+		return file;
+	}
+	
+	private void validateDirectory(File dir, String label) {
+		if (dir == null || !dir.exists() || !dir.isDirectory()) {
+			throw new IllegalArgumentException(label + " not found: " + (dir == null ? "null" : dir.getAbsolutePath()));
+		}
+	}
+	
+	@Override
+	public void ensureImportAllLegacyReportsTaskExists() {
+		String taskUuid = "8f5b0c2a-6c7c-4c4c-9b35-1b7d4ef4c001";
+		String taskName = "Import All Legacy Reports";
+		String taskDescription = "Imports all available legacy reports from the runtime configuration folder";
+		String taskClass = "org.openmrs.module.reportbuilder.tasks.ImportAllLegacyReportsTask";
+		
+		org.openmrs.scheduler.SchedulerService schedulerService = Context.getSchedulerService();
+		org.openmrs.scheduler.TaskDefinition task = schedulerService.getTaskByUuid(taskUuid);
+		
+		if (task == null) {
+			task = new org.openmrs.scheduler.TaskDefinition();
+			task.setUuid(taskUuid);
+			task.setName(taskName);
+			task.setDescription(taskDescription);
+			task.setTaskClass(taskClass);
+			task.setStartOnStartup(false);
+			task.setStarted(false);
+			task.setRepeatInterval(0L);
+			schedulerService.saveTaskDefinition(task);
+			return;
+		}
+		
+		boolean changed = false;
+		
+		if (!taskName.equals(task.getName())) {
+			task.setName(taskName);
+			changed = true;
+		}
+		if (!taskDescription.equals(task.getDescription())) {
+			task.setDescription(taskDescription);
+			changed = true;
+		}
+		if (!taskClass.equals(task.getTaskClass())) {
+			task.setTaskClass(taskClass);
+			changed = true;
+		}
+		
+		if (changed) {
+			schedulerService.saveTaskDefinition(task);
+		}
+	}
+	
+	private DesignConfig resolveLegacyDesignConfig(File legacyRootDir, DesignRefConfig designRef) throws Exception {
+		if (designRef == null) {
+			throw new IllegalArgumentException("Design reference is required");
+		}
+		
+		if (hasText(designRef.getFile())) {
+			File designFile = requireFile(legacyRootDir, designRef.getFile());
+			return legacyConfigParser.parse(designFile, DesignConfig.class);
+		}
+		
+		DesignConfig config = new DesignConfig();
+		config.setUuid(designRef.getUuid());
+		config.setName(designRef.getName());
+		config.setType(designRef.getType());
+		config.setTemplate(designRef.getTemplate());
+		return config;
+	}
+	
+	private boolean hasText(String value) {
+		return value != null && value.trim().length() > 0;
+	}
+	
+	public void setLegacyConfigParser(JsonConfigParser legacyConfigParser) {
+		this.legacyConfigParser = legacyConfigParser;
+	}
+	
+	public void setLegacyReferenceResolver(ReferenceResolver legacyReferenceResolver) {
+		this.legacyReferenceResolver = legacyReferenceResolver;
+	}
+	
+	public void setLegacyParameterBuilder(ParameterBuilder legacyParameterBuilder) {
+		this.legacyParameterBuilder = legacyParameterBuilder;
+	}
+	
+	public void setLegacyCohortDefinitionFactory(CohortDefinitionFactory legacyCohortDefinitionFactory) {
+		this.legacyCohortDefinitionFactory = legacyCohortDefinitionFactory;
+	}
+	
+	public void setLegacyDatasetDefinitionFactory(DatasetDefinitionFactory legacyDatasetDefinitionFactory) {
+		this.legacyDatasetDefinitionFactory = legacyDatasetDefinitionFactory;
+	}
+	
+	public void setLegacyReportDefinitionFactory(ReportDefinitionFactory legacyReportDefinitionFactory) {
+		this.legacyReportDefinitionFactory = legacyReportDefinitionFactory;
+	}
+	
+	public void setLegacyDesignBuilder(DesignBuilder legacyDesignBuilder) {
+		this.legacyDesignBuilder = legacyDesignBuilder;
+	}
+	
+	public void setLegacyConfigValidator(ConfigValidator legacyConfigValidator) {
+		this.legacyConfigValidator = legacyConfigValidator;
+	}
+	
+	// =========================
+	// Legacy Report Import (from LegacyReportImportService)
+	// =========================
+	
+	@Override
+	public org.openmrs.module.reporting.report.definition.ReportDefinition importReportFromFile(File jsonFile) {
+		try {
+			LegacyReportImporter importer = new LegacyReportImporter();
+			return importer.importReportFromFile(jsonFile);
+		}
+		catch (Exception e) {
+			throw new org.openmrs.api.APIException("Failed to import report from file: " + jsonFile.getName(), e);
+		}
+	}
+	
+	@Override
+	public org.openmrs.module.reporting.report.definition.ReportDefinition importReportFromJson(String jsonContent) {
+		try {
+			LegacyReportImporter importer = new LegacyReportImporter();
+			return importer.importReportFromJson(jsonContent);
+		}
+		catch (Exception e) {
+			throw new org.openmrs.api.APIException("Failed to import report from JSON", e);
+		}
+	}
+	
+	@Override
+	public List<org.openmrs.module.reporting.report.definition.ReportDefinition> importReportsFromDirectory(
+	        File reportsDirectory) {
+		try {
+			LegacyReportImporter importer = new LegacyReportImporter();
+			return importer.importReportsFromDirectory(reportsDirectory);
+		}
+		catch (Exception e) {
+			throw new org.openmrs.api.APIException("Failed to import reports from directory: "
+			        + reportsDirectory.getAbsolutePath(), e);
+		}
+	}
+	
+	@Override
+	public org.openmrs.module.reportbuilder.legacyconfig.LegacyReportImporter.ValidationResult validateContract(
+	        File jsonFile, Class<?> javaClass) {
+		LegacyReportImporter importer = new LegacyReportImporter();
+		return importer.validateContract(jsonFile, javaClass);
+	}
+	
+	@Override
+	public List<org.openmrs.module.reporting.report.definition.ReportDefinition> importUgandaEMRLegacyReports(
+	        String legacyReportsPath) {
+		File legacyReportsDir = new File(legacyReportsPath);
+		if (!legacyReportsDir.exists() || !legacyReportsDir.isDirectory()) {
+			throw new org.openmrs.api.APIException("Invalid UgandaEMRReports path: " + legacyReportsPath);
+		}
+		
+		// Check for legacy/reports subdirectory (new structure)
+		File reportsDir = new File(legacyReportsDir, "legacy/reports");
+		if (!reportsDir.exists()) {
+			// Fall back to checking for reports2019 (old structure)
+			reportsDir = new File(legacyReportsDir, "reports2019");
+		}
+		
+		if (!reportsDir.exists()) {
+			throw new org.openmrs.api.APIException("No reports directory found in: " + legacyReportsPath);
+		}
+		
+		return importReportsFromDirectory(reportsDir);
+	}
+	
+	@Override
+	public void ensureLegacyReportsImported() {
+		// This method would be called during module startup to ensure
+		// all legacy reports are imported into the system
+		
+		// Implementation would check if reports have already been imported
+		// and only import new or updated reports
+		
+		// For now, this is a placeholder for the startup import logic
+	}
+	
+	// =========================
+	// Generic Report Import (from GenericReportImportService)
+	// =========================
+	
+	// Generic report import service instance
+	private GenericReportImportService genericReportImportService;
+	
+	private GenericReportImportService getGenericReportImportService() {
+		if (genericReportImportService == null) {
+			genericReportImportService = new GenericReportImportService();
+			// Manually inject the DAO since we're not using Spring for this instance
+			genericReportImportService.setReportBuilderDAO(dao);
+		}
+		return genericReportImportService;
+	}
+	
+	@Override
+	@Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+	public List<org.openmrs.module.reportbuilder.legacyconfig.generic.ReportImportResult> importAllGenericReports() {
+		return getGenericReportImportService().importAllGenericReports();
+	}
+	
+	@Override
+	@Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+	public org.openmrs.module.reportbuilder.legacyconfig.generic.ReportImportResult importGenericReportFromFile(File jsonFile) {
+		return getGenericReportImportService().importGenericReportFromFile(jsonFile);
+	}
+	
+	@Override
+	@Transactional(readOnly = true)
+	public boolean areGenericReportsAlreadyImported() {
+		return genericReportImportService.areGenericReportsAlreadyImported();
+	}
+	
+	@Override
+	public void ensureImportAllGenericReportsTaskExists() {
+		genericReportImportService.ensureImportAllGenericReportsTaskExists();
+	}
+	
+	// =========================================================
+	// Legacy Reports
+	// =========================================================
+	
+	@Override
+	@Transactional(readOnly = true)
+	public List<LegacyReportConfig> getAllLegacyReports() {
+		return dao.getAllLegacyReports();
+	}
+	
+	@Override
+	@Transactional(readOnly = true)
+	public LegacyReportConfig getLegacyReportByUuid(String uuid) {
+		LegacyReport entity = dao.getLegacyReportByUuid(uuid);
+		return convertToConfig(entity);
+	}
+	
+	@Override
+	@Transactional(readOnly = true)
+	public LegacyReportConfig getLegacyReportByName(String name) {
+		LegacyReport entity = dao.getLegacyReportByName(name);
+		return convertToConfig(entity);
+	}
+	
+	@Override
+	@Transactional
+	public LegacyReportConfig createLegacyReport(LegacyReportConfig config) {
+		if (config == null) {
+			throw new org.openmrs.api.APIException("Report configuration cannot be null");
+		}
+		
+		if (config.getName() == null || config.getName().trim().isEmpty()) {
+			throw new org.openmrs.api.APIException("Report name is required");
+		}
+		
+		// Check for duplicate name
+		LegacyReport existingEntity = dao.getLegacyReportByName(config.getName());
+		if (existingEntity != null) {
+			throw new org.openmrs.api.APIException("A report with this name already exists");
+		}
+		
+		// Validate the configuration
+		ReportValidationResult validation = validateLegacyReport(config);
+		if (!validation.isValid()) {
+			throw new org.openmrs.api.APIException("Invalid report configuration: " + validation.getSummary());
+		}
+		
+		// Generate UUID if not provided
+		if (config.getUuid() == null || config.getUuid().trim().isEmpty()) {
+			config.setUuid(java.util.UUID.randomUUID().toString());
+		}
+		
+		// Set default values
+		if (config.getStatus() == null || config.getStatus().trim().isEmpty()) {
+			config.setStatus("ACTIVE");
+		}
+		
+		LegacyReport entity = convertToEntity(config);
+		dao.saveLegacyReport(entity);
+		return convertToConfig(entity);
+	}
+	
+	@Override
+	@Transactional
+	public LegacyReportConfig updateLegacyReport(String uuid, LegacyReportConfig config) {
+		if (uuid == null || uuid.trim().isEmpty()) {
+			throw new org.openmrs.api.APIException("Report UUID is required");
+		}
+		
+		if (config == null) {
+			throw new org.openmrs.api.APIException("Report configuration cannot be null");
+		}
+		
+		// Check if report exists
+		LegacyReport existingEntity = dao.getLegacyReportByUuid(uuid);
+		if (existingEntity == null) {
+			throw new org.openmrs.api.APIException("Report not found with UUID: " + uuid);
+		}
+		LegacyReportConfig existing = convertToConfig(existingEntity);
+		
+		// Check for duplicate name (if name changed)
+		if (!existing.getName().equals(config.getName())) {
+			LegacyReport duplicateEntity = dao.getLegacyReportByName(config.getName());
+			if (duplicateEntity != null && !duplicateEntity.getUuid().equals(uuid)) {
+				throw new org.openmrs.api.APIException("A report with this name already exists");
+			}
+		}
+		
+		// Validate the configuration
+		ReportValidationResult validation = validateLegacyReport(config);
+		if (!validation.isValid()) {
+			throw new org.openmrs.api.APIException("Invalid report configuration: " + validation.getSummary());
+		}
+		
+		// Set the UUID to ensure we're updating the correct report
+		config.setUuid(uuid);
+		
+		LegacyReport entity = convertToEntity(config);
+		dao.saveLegacyReport(entity);
+		return convertToConfig(entity);
+	}
+	
+	@Override
+	@Transactional
+	public void deleteLegacyReport(String uuid) {
+		if (uuid == null || uuid.trim().isEmpty()) {
+			throw new org.openmrs.api.APIException("Report UUID is required");
+		}
+		
+		// Check if report exists
+		LegacyReport existingEntity = dao.getLegacyReportByUuid(uuid);
+		if (existingEntity == null) {
+			throw new org.openmrs.api.APIException("Report not found with UUID: " + uuid);
+		}
+		
+		dao.deleteLegacyReport(uuid);
+	}
+	
+	@Override
+	@Transactional(readOnly = true)
+	public ReportValidationResult validateLegacyReport(LegacyReportConfig config) {
+		ReportValidationResult result = new ReportValidationResult();
+		
+		if (config == null) {
+			result.addError("Report configuration cannot be null");
+			return result;
+		}
+		
+		// Validate basic fields
+		if (config.getName() == null || config.getName().trim().isEmpty()) {
+			result.addError("Report name is required");
+		}
+		
+		if (config.getVersion() == null || config.getVersion().trim().isEmpty()) {
+			result.addWarning("Report version is not specified");
+		}
+		
+		// Validate parameters
+		if (config.getParameters() != null) {
+			for (int i = 0; i < config.getParameters().size(); i++) {
+				LegacyReportConfig.Parameter param = config.getParameters().get(i);
+				if (param.getName() == null || param.getName().trim().isEmpty()) {
+					result.addError("Parameter at index " + i + " is missing a name");
+				}
+				if (param.getType() == null || param.getType().trim().isEmpty()) {
+					result.addError("Parameter '" + param.getName() + "' is missing a type");
+				}
+			}
+		}
+		
+		// Validate advanced features
+		if (config.getAdvancedFeatures() != null && config.getAdvancedFeatures().getIndicatorDataSet() != null
+		        && config.getAdvancedFeatures().getIndicatorDataSet().isEnabled()) {
+			
+			validateIndicatorDataSet(config, result);
+		}
+		
+		// Validate dataset definitions
+		if (config.getDataSetDefinitions() != null) {
+			for (int i = 0; i < config.getDataSetDefinitions().size(); i++) {
+				LegacyReportConfig.DataSetDefinition dataset = config.getDataSetDefinitions().get(i);
+				if (dataset.getName() == null || dataset.getName().trim().isEmpty()) {
+					result.addError("Dataset definition at index " + i + " is missing a name");
+				}
+				if (dataset.getType() == null || dataset.getType().trim().isEmpty()) {
+					result.addError("Dataset '" + dataset.getName() + "' is missing a type");
+				}
+			}
+		}
+		
+		// Validate SQL
+		validateSQLQueries(config, result);
+		
+		result.setValid(!result.hasErrors());
+		
+		return result;
+	}
+	
+	private void validateIndicatorDataSet(LegacyReportConfig config, ReportValidationResult result) {
+		LegacyReportConfig.IndicatorDataSet indicatorDataSet = config.getAdvancedFeatures().getIndicatorDataSet();
+		
+		// Validate indicators
+		if (indicatorDataSet.getIndicators() != null) {
+			for (int i = 0; i < indicatorDataSet.getIndicators().size(); i++) {
+				LegacyReportConfig.Indicator indicator = indicatorDataSet.getIndicators().get(i);
+				
+				if (indicator.getKey() == null || indicator.getKey().trim().isEmpty()) {
+					result.addError("Indicator at index " + i + " is missing a key");
+				}
+				
+				if (indicator.getType() == null || indicator.getType().trim().isEmpty()) {
+					result.addError("Indicator '" + indicator.getKey() + "' is missing a type");
+				}
+				
+				// Validate BASE indicators
+				if ("BASE".equalsIgnoreCase(indicator.getType())) {
+					if (indicator.getSqlQuery() == null || indicator.getSqlQuery().trim().isEmpty()) {
+						result.addError("BASE indicator '" + indicator.getKey() + "' is missing a SQL query");
+					}
+				}
+				
+				// Validate COMPOSITE indicators
+				if ("COMPOSITE".equalsIgnoreCase(indicator.getType())) {
+					if (indicator.getFormula() == null || indicator.getFormula().trim().isEmpty()) {
+						result.addError("COMPOSITE indicator '" + indicator.getKey() + "' is missing a formula");
+					}
+				}
+				
+				// Validate TEMPORAL indicators
+				if ("TEMPORAL".equalsIgnoreCase(indicator.getType())) {
+					if (indicator.getBaseIndicator() == null || indicator.getBaseIndicator().trim().isEmpty()) {
+						result.addError("TEMPORAL indicator '" + indicator.getKey()
+						        + "' is missing a base indicator reference");
+					}
+				}
+			}
+		}
+		
+		// Validate dimension definitions
+		if (indicatorDataSet.getDimensionDefinitions() != null) {
+			for (int i = 0; i < indicatorDataSet.getDimensionDefinitions().size(); i++) {
+				LegacyReportConfig.DimensionDefinition dimension = indicatorDataSet.getDimensionDefinitions().get(i);
+				
+				if (dimension.getName() == null || dimension.getName().trim().isEmpty()) {
+					result.addError("Dimension definition at index " + i + " is missing a name");
+				}
+				
+				if (dimension.getType() == null || dimension.getType().trim().isEmpty()) {
+					result.addError("Dimension '" + dimension.getName() + "' is missing a type");
+				}
+				
+				// Validate dimension groups
+				if (dimension.getGroups() != null && dimension.getGroups().isEmpty()) {
+					result.addWarning("Dimension '" + dimension.getName() + "' has no groups defined");
+				}
+			}
+		}
+	}
+	
+	private void validateSQLQueries(LegacyReportConfig config, ReportValidationResult result) {
+		// Validate SQL queries in indicators
+		if (config.getAdvancedFeatures() != null && config.getAdvancedFeatures().getIndicatorDataSet() != null
+		        && config.getAdvancedFeatures().getIndicatorDataSet().getIndicators() != null) {
+			
+			for (LegacyReportConfig.Indicator indicator : config.getAdvancedFeatures().getIndicatorDataSet().getIndicators()) {
+				if ("BASE".equalsIgnoreCase(indicator.getType()) && indicator.getSqlQuery() != null) {
+					validateSQLQuery(indicator.getSqlQuery(), result, "Indicator '" + indicator.getKey() + "'");
+				}
+			}
+		}
+		
+		// Validate SQL queries in dataset definitions
+		if (config.getDataSetDefinitions() != null) {
+			for (LegacyReportConfig.DataSetDefinition dataset : config.getDataSetDefinitions()) {
+				if ("SQL_DATA_SET".equalsIgnoreCase(dataset.getType()) && dataset.getConfig() != null
+				        && dataset.getConfig().getSql() != null) {
+					validateSQLQuery(dataset.getConfig().getSql(), result, "Dataset '" + dataset.getName() + "'");
+				}
+			}
+		}
+	}
+	
+	private void validateSQLQuery(String sql, ReportValidationResult result, String context) {
+		// Basic SQL validation
+		if (sql.trim().isEmpty()) {
+			result.addError(context + " has empty SQL query");
+			return;
+		}
+		
+		// Check for dangerous operations
+		String upperSQL = sql.toUpperCase();
+		String[] dangerousOperations = { "DROP", "DELETE", "TRUNCATE", "ALTER", "CREATE", "INSERT", "UPDATE" };
+		
+		for (String dangerous : dangerousOperations) {
+			if (upperSQL.contains(dangerous)) {
+				result.addError(context + " contains dangerous SQL operation: " + dangerous);
+				result.getSqlValidation().addSqlError(context + ": " + dangerous + " operation not allowed");
+			}
+		}
+		
+		// Validate SQL syntax (basic check)
+		if (!upperSQL.startsWith("SELECT")) {
+			result.addWarning(context + " SQL query does not start with SELECT");
+		}
+		
+		if (!upperSQL.contains("FROM")) {
+			result.addError(context + " SQL query is missing FROM clause");
+		}
+	}
+	
+	@Override
+	@Transactional(readOnly = true)
+	public List<LegacyReportConfig> getLegacyReportsByCategory(String category) {
+		return dao.getLegacyReportsByCategory(category);
+	}
+	
+	@Override
+	@Transactional(readOnly = true)
+	public List<LegacyReportConfig> getLegacyReportsByStatus(String status) {
+		return dao.getLegacyReportsByStatus(status);
+	}
+	
+	@Override
+	@Transactional(readOnly = true)
+	public List<LegacyReportConfig> searchLegacyReports(String query) {
+		return dao.searchLegacyReports(query);
+	}
+	
+	@Override
+	@Transactional(readOnly = true)
+	public int getLegacyReportCount() {
+		return dao.getLegacyReportCount();
+	}
+	
+	// Helper methods for LegacyReport conversion
+	private LegacyReportConfig convertToConfig(LegacyReport entity) {
+		if (entity == null) {
+			return null;
+		}
+		
+		try {
+			com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			LegacyReportConfig config = objectMapper.readValue(entity.getConfigJson(), LegacyReportConfig.class);
+			config.setUuid(entity.getUuid());
+			config.setName(entity.getName());
+			config.setDescription(entity.getDescription());
+			config.setVersion(entity.getVersion());
+			config.setCategory(entity.getCategory());
+			config.setSubcategory(entity.getSubcategory());
+			config.setReportType(entity.getReportType());
+			config.setReportYear(entity.getReportYear());
+			config.setReportScope(entity.getReportScope());
+			config.setStatus(entity.getStatus());
+			
+			if (entity.getDateCreated() != null) {
+				config.setDateCreated(entity.getDateCreated().toString());
+			}
+			if (entity.getDateChanged() != null) {
+				config.setDateChanged(entity.getDateChanged().toString());
+			}
+			
+			return config;
+		}
+		catch (Exception e) {
+			throw new org.openmrs.api.APIException("Failed to convert LegacyReport to LegacyReportConfig", e);
+		}
+	}
+	
+	private LegacyReport convertToEntity(LegacyReportConfig config) {
+		if (config == null) {
+			return null;
+		}
+		
+		try {
+			com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			LegacyReport entity;
+			
+			if (config.getUuid() != null) {
+				entity = dao.getLegacyReportByUuid(config.getUuid());
+				if (entity == null || entity.isRetired()) {
+					entity = new LegacyReport(config.getUuid());
+				}
+			} else {
+				entity = new LegacyReport();
+			}
+			
+			entity.setName(config.getName());
+			entity.setDescription(config.getDescription());
+			entity.setVersion(config.getVersion());
+			entity.setCategory(config.getCategory());
+			entity.setSubcategory(config.getSubcategory());
+			entity.setReportType(config.getReportType());
+			entity.setReportYear(config.getReportYear());
+			entity.setReportScope(config.getReportScope());
+			entity.setStatus(config.getStatus());
+			
+			String configJson = objectMapper.writeValueAsString(config);
+			entity.setConfigJson(configJson);
+			entity.setDateChanged(new java.util.Date());
+			
+			return entity;
+		}
+		catch (Exception e) {
+			throw new org.openmrs.api.APIException("Failed to convert LegacyReportConfig to LegacyReport", e);
+		}
 	}
 }

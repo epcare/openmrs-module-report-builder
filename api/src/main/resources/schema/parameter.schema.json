@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Parameter Config",
+  "type": "object",
+  "required": ["name", "type"],
+  "properties": {
+    "name": { "type": "string" },
+    "type": { "type": "string" },
+    "label": { "type": "string" },
+    "required": { "type": "boolean" }
+  }
+}

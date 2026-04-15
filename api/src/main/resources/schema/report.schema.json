@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Legacy Report Config",
+  "type": "object",
+  "required": ["uuid", "key", "name", "datasets"],
+  "properties": {
+    "uuid": { "type": "string" },
+    "key": { "type": "string" },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["LEGACY", "TRANSITIONAL", "DEPRECATED"]
+    },
+    "parametersRef": { "type": "string" },
+    "parameters": {
+      "type": "array",
+      "items": { "$ref": "parameter.schema.json" }
+    },
+    "datasets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/datasetRef" },
+      "minItems": 1
+    },
+    "designs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/designRef" }
+    }
+  },
+  "$defs": {
+    "datasetRef": {
+      "type": "object",
+      "required": ["key", "file"],
+      "properties": {
+        "key": { "type": "string" },
+        "file": { "type": "string" }
+      }
+    },
+    "designRef": {
+      "type": "object",
+      "required": ["file"],
+      "properties": {
+        "file": { "type": "string" }
+      }
+    }
+  }
+}

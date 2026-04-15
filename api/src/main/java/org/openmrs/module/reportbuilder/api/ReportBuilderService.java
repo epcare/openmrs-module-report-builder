@@ -11,7 +11,9 @@ package org.openmrs.module.reportbuilder.api;
 
 import org.openmrs.api.OpenmrsService;
 import org.openmrs.module.reportbuilder.dto.SqlPreviewResult;
+import org.openmrs.module.reportbuilder.legacyconfig.importer.ReportImportResult;
 import org.openmrs.module.reportbuilder.model.*;
+import org.openmrs.module.reportbuilder.validation.ReportValidationResult;
 import org.openmrs.module.reporting.report.ReportData;
 import org.openmrs.module.reporting.report.ReportDesign;
 import org.openmrs.module.reporting.report.definition.ReportDefinition;
@@ -270,6 +272,13 @@ public interface ReportBuilderService extends OpenmrsService {
 	@Transactional
 	void purgeReportLibrary(ReportLibrary reportLibrary);
 	
+	/**
+	 * Add a generic report to the report library
+	 */
+	@Transactional
+	void addGenericReportToLibrary(String reportDefinitionUuid, String name, String description, String code,
+	        ReportCategory category, ReportBuilderReport.ReportType reportType);
+	
 	@Transactional
 	ETLSource saveETLSource(ETLSource etlSource);
 	
@@ -330,4 +339,192 @@ public interface ReportBuilderService extends OpenmrsService {
 			this.compiledJson = compiledJson;
 		}
 	}
+	
+	public ReportImportResult importLegacyReportPackage(File reportDir) throws Exception;
+	
+	public List<ReportImportResult> importAllLegacyReportPackages(File legacyReportsRootDir) throws Exception;
+	
+	public ReportImportResult validateLegacyReportPackage(File reportDir) throws Exception;
+	
+	ReportImportResult importRuntimeLegacyReportPackage(String reportKey) throws Exception;
+	
+	ReportImportResult validateRuntimeLegacyReportPackage(String reportKey) throws Exception;
+	
+	List<ReportImportResult> importAllRuntimeLegacyReportPackages() throws Exception;
+	
+	void ensureImportAllLegacyReportsTaskExists();
+	
+	// =========================
+	// Legacy Report Import (from LegacyReportImportService)
+	// =========================
+	
+	/**
+	 * Import a single report from a JSON file
+	 * 
+	 * @param jsonFile The JSON configuration file
+	 * @return OpenMRS ReportDefinition
+	 */
+	org.openmrs.module.reporting.report.definition.ReportDefinition importReportFromFile(File jsonFile);
+	
+	/**
+	 * Import a report from JSON string
+	 * 
+	 * @param jsonContent The JSON configuration
+	 * @return OpenMRS ReportDefinition
+	 */
+	org.openmrs.module.reporting.report.definition.ReportDefinition importReportFromJson(String jsonContent);
+	
+	/**
+	 * Import all reports from a directory
+	 * 
+	 * @param reportsDirectory Directory containing JSON report files
+	 * @return List of imported ReportDefinitions
+	 */
+	List<org.openmrs.module.reporting.report.definition.ReportDefinition> importReportsFromDirectory(File reportsDirectory);
+	
+	/**
+	 * Validate that a JSON report file matches its Java contract
+	 * 
+	 * @param jsonFile The JSON configuration file
+	 * @param javaClass The corresponding Java class
+	 * @return validation result with any discrepancies
+	 */
+	org.openmrs.module.reportbuilder.legacyconfig.LegacyReportImporter.ValidationResult validateContract(File jsonFile,
+	        Class<?> javaClass);
+	
+	/**
+	 * Import all UgandaEMRReports legacy reports and convert them to ReportBuilder format
+	 * 
+	 * @param legacyReportsPath Path to UgandaEMRReports legacy directory
+	 * @return List of imported ReportDefinitions
+	 */
+	List<org.openmrs.module.reporting.report.definition.ReportDefinition> importUgandaEMRLegacyReports(
+	        String legacyReportsPath);
+	
+	/**
+	 * Ensure that all legacy reports are imported on module startup
+	 */
+	void ensureLegacyReportsImported();
+	
+	// =========================
+	// Generic Report Import (from GenericReportImportService)
+	// =========================
+	
+	/**
+	 * Import all generic reports from runtime directory
+	 * 
+	 * @return List of import results
+	 */
+	List<org.openmrs.module.reportbuilder.legacyconfig.generic.ReportImportResult> importAllGenericReports();
+	
+	/**
+	 * Import a single generic report from file
+	 * 
+	 * @param jsonFile The JSON file to import
+	 * @return Import result
+	 */
+	org.openmrs.module.reportbuilder.legacyconfig.generic.ReportImportResult importGenericReportFromFile(File jsonFile);
+	
+	/**
+	 * Check if generic reports have already been imported
+	 * 
+	 * @return true if reports are already imported
+	 */
+	boolean areGenericReportsAlreadyImported();
+	
+	/**
+	 * Ensure generic reports import task exists
+	 */
+	void ensureImportAllGenericReportsTaskExists();
+	
+	// =========================================================
+	// Legacy Reports
+	// =========================================================
+	
+	/**
+	 * Get all legacy reports.
+	 * 
+	 * @return list of all legacy reports
+	 */
+	List<LegacyReportConfig> getAllLegacyReports();
+	
+	/**
+	 * Get a legacy report by UUID.
+	 * 
+	 * @param uuid the UUID of the report
+	 * @return the legacy report, or null if not found
+	 */
+	LegacyReportConfig getLegacyReportByUuid(String uuid);
+	
+	/**
+	 * Get a legacy report by name.
+	 * 
+	 * @param name the name of the report
+	 * @return the legacy report, or null if not found
+	 */
+	LegacyReportConfig getLegacyReportByName(String name);
+	
+	/**
+	 * Create a new legacy report.
+	 * 
+	 * @param config the report configuration to create
+	 * @return the created report configuration
+	 */
+	LegacyReportConfig createLegacyReport(LegacyReportConfig config);
+	
+	/**
+	 * Update an existing legacy report.
+	 * 
+	 * @param uuid the UUID of the report to update
+	 * @param config the updated report configuration
+	 * @return the updated report configuration
+	 */
+	LegacyReportConfig updateLegacyReport(String uuid, LegacyReportConfig config);
+	
+	/**
+	 * Delete a legacy report by UUID (soft delete).
+	 * 
+	 * @param uuid the UUID of the report to delete
+	 */
+	void deleteLegacyReport(String uuid);
+	
+	/**
+	 * Validate a legacy report configuration.
+	 * 
+	 * @param config the report configuration to validate
+	 * @return validation result with errors and warnings
+	 */
+	ReportValidationResult validateLegacyReport(LegacyReportConfig config);
+	
+	/**
+	 * Get legacy reports by category.
+	 * 
+	 * @param category the category to filter by
+	 * @return list of legacy reports in the category
+	 */
+	List<LegacyReportConfig> getLegacyReportsByCategory(String category);
+	
+	/**
+	 * Get legacy reports by status.
+	 * 
+	 * @param status the status to filter by
+	 * @return list of legacy reports with the status
+	 */
+	List<LegacyReportConfig> getLegacyReportsByStatus(String status);
+	
+	/**
+	 * Search legacy reports by name or description.
+	 * 
+	 * @param query the search query
+	 * @return list of matching legacy reports
+	 */
+	List<LegacyReportConfig> searchLegacyReports(String query);
+	
+	/**
+	 * Get count of legacy reports.
+	 * 
+	 * @return the count of legacy reports
+	 */
+	int getLegacyReportCount();
+	
 }

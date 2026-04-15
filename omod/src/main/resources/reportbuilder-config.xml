@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:noNamespaceSchemaLocation="http://openmrs.org/xsd/openmrsconfiguration.xsd">
+
+    <!--
+        Report Builder Module Configuration
+
+        External Directory Seeding Settings for Generic Reports
+    -->
+
+    <!-- Enable external directory seeding for generic reports -->
+    <property>
+        <key>reportbuilder.external.seeding.enabled</key>
+        <value>true</value>
+        <description>
+            Enable automatic seeding of generic reports from external runtime directory.
+            When true, reports are automatically loaded from {application_data_directory}/configuration/reports/generic
+        </description>
+    </property>
+
+    <!-- Automatically import reports on module startup -->
+    <property>
+        <key>reportbuilder.external.seeding.auto_import</key>
+        <value>true</value>
+        <description>
+            Automatically import reports on module startup.
+            When true, reports are imported automatically when the module starts.
+            When false, reports must be manually imported via REST API or scheduled task.
+        </description>
+    </property>
+
+    <!-- Subdirectories to scan for reports -->
+    <property>
+        <key>reportbuilder.external.seeding.subdirectories</key>
+        <value>generic,legacy</value>
+        <description>
+            Comma-separated list of subdirectories to scan for reports.
+            Each subdirectory should be under {application_data_directory}/configuration/reports/
+            - generic: Our 114 migrated reports (*-generic.json)
+            - legacy: Original legacy reports (backward compatibility)
+        </description>
+    </property>
+
+    <!-- Validate report categorization during import -->
+    <property>
+        <key>reportbuilder.external.seeding.validate_categorization</key>
+        <value>true</value>
+        <description>
+            Validate report categorization fields during import.
+            Ensures category, subcategory, reportType, reportYear, and reportScope are valid.
+        </description>
+    </property>
+
+    <!-- Skip import if reports already exist -->
+    <property>
+        <key>reportbuilder.external.seeding.skip_existing</key>
+        <value>true</value>
+        <description>
+            Skip importing reports that already exist in the database (matched by UUID).
+            When true, existing reports are updated with new data instead of creating duplicates.
+        </description>
+    </property>
+
+</configuration>

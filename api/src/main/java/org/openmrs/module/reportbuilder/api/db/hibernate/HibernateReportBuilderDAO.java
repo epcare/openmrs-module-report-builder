@@ -813,6 +813,18 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 		return count == null ? 0 : count.longValue();
 	}
 	
+	public ReportLibrary getReportLibraryByReportDefinitionUuid(String reportDefinitionUuid) {
+		Criteria c = getSession().createCriteria(ReportLibrary.class);
+		c.add(Restrictions.eq("reportDefinitionUuid", reportDefinitionUuid));
+		return (ReportLibrary) c.uniqueResult();
+	}
+	
+	public ReportLibrary getReportLibraryByBuilderReportUuid(String builderReportUuid) {
+		Criteria c = getSession().createCriteria(ReportLibrary.class);
+		c.add(Restrictions.eq("reportBuilderReportUuid", builderReportUuid));
+		return (ReportLibrary) c.uniqueResult();
+	}
+	
 	public void purgeReportLibrary(ReportLibrary reportLibrary) {
 		getSession().delete(reportLibrary);
 	}
@@ -843,6 +855,160 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 	
 	public void deleteETLSource(ETLSource etlSource) {
 		getSession().delete(etlSource);
+	}
+	
+	// =========================================================
+	// Legacy Reports
+	// =========================================================
+	
+	private com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+	
+	public LegacyReport saveLegacyReport(LegacyReport legacyReport) {
+		getSession().saveOrUpdate(legacyReport);
+		return legacyReport;
+	}
+	
+	public LegacyReport getLegacyReportByUuid(String uuid) {
+		Criteria c = getSession().createCriteria(LegacyReport.class);
+		c.add(Restrictions.eq("uuid", uuid));
+		c.add(Restrictions.eq("retired", false));
+		return (LegacyReport) c.uniqueResult();
+	}
+	
+	public LegacyReport getLegacyReportByName(String name) {
+		Criteria c = getSession().createCriteria(LegacyReport.class);
+		c.add(Restrictions.eq("name", name));
+		c.add(Restrictions.eq("retired", false));
+		return (LegacyReport) c.uniqueResult();
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<LegacyReportConfig> getAllLegacyReports() {
+		Criteria c = getSession().createCriteria(LegacyReport.class);
+		c.add(Restrictions.eq("retired", false));
+		List<LegacyReport> entities = c.list();
+		return convertToConfigs(entities);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<LegacyReportConfig> getLegacyReportsByCategory(String category) {
+		Criteria c = getSession().createCriteria(LegacyReport.class);
+		c.add(Restrictions.eq("category", category));
+		c.add(Restrictions.eq("retired", false));
+		List<LegacyReport> entities = c.list();
+		return convertToConfigs(entities);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<LegacyReportConfig> getLegacyReportsByStatus(String status) {
+		Criteria c = getSession().createCriteria(LegacyReport.class);
+		c.add(Restrictions.eq("status", status));
+		c.add(Restrictions.eq("retired", false));
+		List<LegacyReport> entities = c.list();
+		return convertToConfigs(entities);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<LegacyReportConfig> searchLegacyReports(String query) {
+		Criteria c = getSession().createCriteria(LegacyReport.class);
+		c.add(Restrictions.or(Restrictions.ilike("name", "%" + query + "%"),
+		    Restrictions.ilike("description", "%" + query + "%")));
+		c.add(Restrictions.eq("retired", false));
+		List<LegacyReport> entities = c.list();
+		return convertToConfigs(entities);
+	}
+	
+	public int getLegacyReportCount() {
+		Criteria c = getSession().createCriteria(LegacyReport.class);
+		c.add(Restrictions.eq("retired", false));
+		c.setProjection(Projections.rowCount());
+		return ((Long) c.uniqueResult()).intValue();
+	}
+	
+	public void deleteLegacyReport(String uuid) {
+		LegacyReport entity = (LegacyReport) getSession().get(LegacyReport.class, uuid);
+		if (entity != null) {
+			entity.setRetired(true);
+			getSession().saveOrUpdate(entity);
+		}
+	}
+	
+	// Helper methods for LegacyReport conversion
+	private List<LegacyReportConfig> convertToConfigs(List<LegacyReport> entities) {
+		List<LegacyReportConfig> configs = new ArrayList<>();
+		for (LegacyReport entity : entities) {
+			configs.add(convertToConfig(entity));
+		}
+		return configs;
+	}
+	
+	private LegacyReportConfig convertToConfig(LegacyReport entity) {
+		if (entity == null) {
+			return null;
+		}
+		
+		try {
+			LegacyReportConfig config = objectMapper.readValue(entity.getConfigJson(), LegacyReportConfig.class);
+			config.setUuid(entity.getUuid());
+			config.setName(entity.getName());
+			config.setDescription(entity.getDescription());
+			config.setVersion(entity.getVersion());
+			config.setCategory(entity.getCategory());
+			config.setSubcategory(entity.getSubcategory());
+			config.setReportType(entity.getReportType());
+			config.setReportYear(entity.getReportYear());
+			config.setReportScope(entity.getReportScope());
+			config.setStatus(entity.getStatus());
+			
+			if (entity.getDateCreated() != null) {
+				config.setDateCreated(entity.getDateCreated().toString());
+			}
+			if (entity.getDateChanged() != null) {
+				config.setDateChanged(entity.getDateChanged().toString());
+			}
+			
+			return config;
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Failed to convert LegacyReport to LegacyReportConfig", e);
+		}
+	}
+	
+	private LegacyReport convertToEntity(LegacyReportConfig config) {
+		if (config == null) {
+			return null;
+		}
+		
+		try {
+			LegacyReport entity;
+			if (config.getUuid() != null) {
+				entity = (LegacyReport) getSession().get(LegacyReport.class, config.getUuid());
+				if (entity == null) {
+					entity = new LegacyReport(config.getUuid());
+				}
+			} else {
+				entity = new LegacyReport();
+			}
+			
+			entity.setName(config.getName());
+			entity.setDescription(config.getDescription());
+			entity.setVersion(config.getVersion());
+			entity.setCategory(config.getCategory());
+			entity.setSubcategory(config.getSubcategory());
+			entity.setReportType(config.getReportType());
+			entity.setReportYear(config.getReportYear());
+			entity.setReportScope(config.getReportScope());
+			entity.setStatus(config.getStatus());
+			
+			String configJson = objectMapper.writeValueAsString(config);
+			entity.setConfigJson(configJson);
+			entity.setDateChanged(new Date());
+			
+			return entity;
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Failed to convert LegacyReportConfig to LegacyReport", e);
+		}
 	}
 	
 	private String like(String q) {

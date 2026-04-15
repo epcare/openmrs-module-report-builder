@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Indicator Config",
+  "type": "object",
+  "required": ["type", "cohortRef"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["cohort"]
+    },
+    "name": { "type": "string" },
+    "cohortRef": { "type": "string" }
+  }
+}
