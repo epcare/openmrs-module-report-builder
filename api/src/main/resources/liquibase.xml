@@ -862,7 +862,69 @@
         </insert>
     </changeSet>
 
-    <!-- Legacy Report Schema -->
-    <include file="liquibase/legacy-report-schema.xml" relativeToChangelogFile="true"/>
+    <changeSet id="reportbuilder-legacy-report-001" author="OpenAI">
+        <createTable tableName="legacy_report">
+            <column name="legacy_report_id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <!-- BaseOpenmrsObject -->
+            <column name="uuid" type="CHAR(38)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+
+            <!-- BaseOpenmrsMetadata -->
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR(2000)"/>
+            <column name="creator" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_legacy_report_creator" references="users(user_id)"/>
+            </column>
+            <column name="date_created" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+            <column name="changed_by" type="INT">
+                <constraints foreignKeyName="fk_legacy_report_changed_by" references="users(user_id)"/>
+            </column>
+            <column name="date_changed" type="DATETIME"/>
+            <column name="retired" type="BIT" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_retired" type="DATETIME"/>
+            <column name="retired_by" type="INT">
+                <constraints foreignKeyName="fk_legacy_report_retired_by" references="users(user_id)"/>
+            </column>
+            <column name="retire_reason" type="VARCHAR(255)"/>
+
+            <!-- LegacyReport-specific -->
+            <column name="version" type="VARCHAR(255)"/>
+            <column name="category" type="VARCHAR(255)"/>
+            <column name="subcategory" type="VARCHAR(255)"/>
+            <column name="report_type" type="VARCHAR(255)"/>
+            <column name="report_year" type="VARCHAR(255)"/>
+            <column name="report_scope" type="VARCHAR(255)"/>
+            <column name="status" type="VARCHAR(50)" defaultValue="ACTIVE"/>
+            <column name="config_json" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="legacy_report" indexName="idx_legacy_report_name">
+            <column name="name"/>
+        </createIndex>
+
+        <createIndex tableName="legacy_report" indexName="idx_legacy_report_category">
+            <column name="category"/>
+        </createIndex>
+
+        <createIndex tableName="legacy_report" indexName="idx_legacy_report_status">
+            <column name="status"/>
+        </createIndex>
+
+        <createIndex tableName="legacy_report" indexName="idx_legacy_report_retired">
+            <column name="retired"/>
+        </createIndex>
+    </changeSet>
 
 </databaseChangeLog>

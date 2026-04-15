@@ -856,32 +856,32 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 	public void deleteETLSource(ETLSource etlSource) {
 		getSession().delete(etlSource);
 	}
-
+	
 	// =========================================================
 	// Legacy Reports
 	// =========================================================
-
+	
 	private com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-
+	
 	public LegacyReport saveLegacyReport(LegacyReport legacyReport) {
 		getSession().saveOrUpdate(legacyReport);
 		return legacyReport;
 	}
-
+	
 	public LegacyReport getLegacyReportByUuid(String uuid) {
 		Criteria c = getSession().createCriteria(LegacyReport.class);
 		c.add(Restrictions.eq("uuid", uuid));
 		c.add(Restrictions.eq("retired", false));
 		return (LegacyReport) c.uniqueResult();
 	}
-
+	
 	public LegacyReport getLegacyReportByName(String name) {
 		Criteria c = getSession().createCriteria(LegacyReport.class);
 		c.add(Restrictions.eq("name", name));
 		c.add(Restrictions.eq("retired", false));
 		return (LegacyReport) c.uniqueResult();
 	}
-
+	
 	@SuppressWarnings("unchecked")
 	public List<LegacyReportConfig> getAllLegacyReports() {
 		Criteria c = getSession().createCriteria(LegacyReport.class);
@@ -889,7 +889,7 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 		List<LegacyReport> entities = c.list();
 		return convertToConfigs(entities);
 	}
-
+	
 	@SuppressWarnings("unchecked")
 	public List<LegacyReportConfig> getLegacyReportsByCategory(String category) {
 		Criteria c = getSession().createCriteria(LegacyReport.class);
@@ -898,7 +898,7 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 		List<LegacyReport> entities = c.list();
 		return convertToConfigs(entities);
 	}
-
+	
 	@SuppressWarnings("unchecked")
 	public List<LegacyReportConfig> getLegacyReportsByStatus(String status) {
 		Criteria c = getSession().createCriteria(LegacyReport.class);
@@ -907,26 +907,24 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 		List<LegacyReport> entities = c.list();
 		return convertToConfigs(entities);
 	}
-
+	
 	@SuppressWarnings("unchecked")
 	public List<LegacyReportConfig> searchLegacyReports(String query) {
 		Criteria c = getSession().createCriteria(LegacyReport.class);
-		c.add(Restrictions.or(
-			Restrictions.ilike("name", "%" + query + "%"),
-			Restrictions.ilike("description", "%" + query + "%")
-		));
+		c.add(Restrictions.or(Restrictions.ilike("name", "%" + query + "%"),
+		    Restrictions.ilike("description", "%" + query + "%")));
 		c.add(Restrictions.eq("retired", false));
 		List<LegacyReport> entities = c.list();
 		return convertToConfigs(entities);
 	}
-
+	
 	public int getLegacyReportCount() {
 		Criteria c = getSession().createCriteria(LegacyReport.class);
 		c.add(Restrictions.eq("retired", false));
 		c.setProjection(Projections.rowCount());
 		return ((Long) c.uniqueResult()).intValue();
 	}
-
+	
 	public void deleteLegacyReport(String uuid) {
 		LegacyReport entity = (LegacyReport) getSession().get(LegacyReport.class, uuid);
 		if (entity != null) {
@@ -934,7 +932,7 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 			getSession().saveOrUpdate(entity);
 		}
 	}
-
+	
 	// Helper methods for LegacyReport conversion
 	private List<LegacyReportConfig> convertToConfigs(List<LegacyReport> entities) {
 		List<LegacyReportConfig> configs = new ArrayList<>();
@@ -943,12 +941,12 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 		}
 		return configs;
 	}
-
+	
 	private LegacyReportConfig convertToConfig(LegacyReport entity) {
 		if (entity == null) {
 			return null;
 		}
-
+		
 		try {
 			LegacyReportConfig config = objectMapper.readValue(entity.getConfigJson(), LegacyReportConfig.class);
 			config.setUuid(entity.getUuid());
@@ -961,25 +959,26 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 			config.setReportYear(entity.getReportYear());
 			config.setReportScope(entity.getReportScope());
 			config.setStatus(entity.getStatus());
-
+			
 			if (entity.getDateCreated() != null) {
 				config.setDateCreated(entity.getDateCreated().toString());
 			}
 			if (entity.getDateChanged() != null) {
 				config.setDateChanged(entity.getDateChanged().toString());
 			}
-
+			
 			return config;
-		} catch (Exception e) {
+		}
+		catch (Exception e) {
 			throw new RuntimeException("Failed to convert LegacyReport to LegacyReportConfig", e);
 		}
 	}
-
+	
 	private LegacyReport convertToEntity(LegacyReportConfig config) {
 		if (config == null) {
 			return null;
 		}
-
+		
 		try {
 			LegacyReport entity;
 			if (config.getUuid() != null) {
@@ -990,7 +989,7 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 			} else {
 				entity = new LegacyReport();
 			}
-
+			
 			entity.setName(config.getName());
 			entity.setDescription(config.getDescription());
 			entity.setVersion(config.getVersion());
@@ -1000,17 +999,18 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 			entity.setReportYear(config.getReportYear());
 			entity.setReportScope(config.getReportScope());
 			entity.setStatus(config.getStatus());
-
+			
 			String configJson = objectMapper.writeValueAsString(config);
 			entity.setConfigJson(configJson);
 			entity.setDateChanged(new Date());
-
+			
 			return entity;
-		} catch (Exception e) {
+		}
+		catch (Exception e) {
 			throw new RuntimeException("Failed to convert LegacyReportConfig to LegacyReport", e);
 		}
 	}
-
+	
 	private String like(String q) {
 		return "%" + q.trim().toLowerCase() + "%";
 	}

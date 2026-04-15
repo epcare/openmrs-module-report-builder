@@ -2,24 +2,30 @@ package org.openmrs.module.reportbuilder.model;
 
 import org.openmrs.BaseOpenmrsMetadata;
 
-import javax.persistence.*;
-import java.util.Date;
+import javax.persistence.AttributeOverride;
+import javax.persistence.AttributeOverrides;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.Table;
 
 /**
- * Hibernate entity for legacy reports stored in the database. This maps to the legacy_report table
- * and stores the complete configuration as JSON.
+ * Hibernate entity for legacy reports stored in the database. Maps to the legacy_report table and
+ * stores the complete configuration as JSON.
  */
 @Entity
 @Table(name = "legacy_report")
+@AttributeOverrides({ @AttributeOverride(name = "description", column = @Column(name = "description", length = 2000)) })
 public class LegacyReport extends BaseOpenmrsMetadata {
-
-	private static final long serialVersionUID = 1L;
-
-	@Column(name = "name", nullable = false)
-	private String name;
 	
-	@Column(name = "description", length = 2000)
-	private String description;
+	private static final long serialVersionUID = 1L;
+	
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Column(name = "legacy_report_id")
+	private Integer id;
 	
 	@Column(name = "version")
 	private String version;
@@ -45,34 +51,11 @@ public class LegacyReport extends BaseOpenmrsMetadata {
 	@Column(name = "config_json", nullable = false, columnDefinition = "TEXT")
 	private String configJson;
 	
-	@Column(name = "date_changed")
-	private Date dateChanged;
-	
-	// Constructors
 	public LegacyReport() {
-		this.dateChanged = new Date();
 	}
 	
 	public LegacyReport(String uuid) {
-		this();
-		this.setUuid(uuid);
-	}
-	
-	// Getters and Setters
-	public String getName() {
-		return name;
-	}
-	
-	public void setName(String name) {
-		this.name = name;
-	}
-	
-	public String getDescription() {
-		return description;
-	}
-	
-	public void setDescription(String description) {
-		this.description = description;
+		setUuid(uuid);
 	}
 	
 	public String getVersion() {
@@ -139,17 +122,19 @@ public class LegacyReport extends BaseOpenmrsMetadata {
 		this.configJson = configJson;
 	}
 	
-	public Date getDateChanged() {
-		return dateChanged;
+	@Override
+	public Integer getId() {
+		return id;
 	}
 	
-	public void setDateChanged(Date dateChanged) {
-		this.dateChanged = dateChanged;
+	@Override
+	public void setId(Integer id) {
+		this.id = id;
 	}
 	
 	@Override
 	public String toString() {
-		return "LegacyReport{" + "uuid='" + getUuid() + '\'' + ", name='" + name + '\'' + ", version='" + version + '\''
-		        + ", status='" + status + '\'' + '}';
+		return "LegacyReport{" + "uuid='" + getUuid() + '\'' + ", name='" + getName() + '\'' + ", version='" + version
+		        + '\'' + ", status='" + status + '\'' + '}';
 	}
 }

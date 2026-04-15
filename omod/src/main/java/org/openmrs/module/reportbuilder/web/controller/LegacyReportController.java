@@ -27,14 +27,14 @@ import java.util.*;
 @Controller
 @RequestMapping(value = "/rest/" + RestConstants.VERSION_1 + "/reportbuilder/legacy")
 public class LegacyReportController extends BaseRestController {
-
+	
 	private final ObjectMapper objectMapper = new ObjectMapper();
-
+	
 	@Autowired
 	private ReportBuilderService reportBuilderService;
-
+	
 	private final LegacyReportImporter legacyReportImporter = new LegacyReportImporter();
-
+	
 	private static final String TEMP_UPLOAD_DIR = System.getProperty("java.io.tmpdir") + "/reportbuilder_uploads";
 	
 	/**
@@ -80,7 +80,7 @@ public class LegacyReportController extends BaseRestController {
 		SimpleObject response = new SimpleObject();
 		try {
 			LegacyReportConfig report = reportBuilderService.getLegacyReportByUuid(uuid);
-
+			
 			if (report == null) {
 				response.put("uuid", uuid);
 				response.put("status", "NOT_FOUND");
@@ -88,7 +88,7 @@ public class LegacyReportController extends BaseRestController {
 				response.put("error", "Report not found");
 				return response;
 			}
-
+			
 			// Convert the complete report to SimpleObject
 			response.put("uuid", report.getUuid());
 			response.put("name", report.getName());
@@ -105,7 +105,7 @@ public class LegacyReportController extends BaseRestController {
 			response.put("dataSetDefinitions", report.getDataSetDefinitions());
 			response.put("dateCreated", report.getDateCreated());
 			response.put("dateChanged", report.getDateChanged());
-
+			
 			response.put("success", true);
 			return response;
 		}
@@ -113,7 +113,7 @@ public class LegacyReportController extends BaseRestController {
 			throw new APIException("Failed to get legacy report: " + uuid, e);
 		}
 	}
-
+	
 	/**
 	 * Create a new legacy report
 	 */
@@ -121,31 +121,33 @@ public class LegacyReportController extends BaseRestController {
 	@ResponseBody
 	public SimpleObject createLegacyReport(@RequestBody Map<String, Object> payload) {
 		SimpleObject response = new SimpleObject();
-
+		
 		try {
 			// Convert the payload to LegacyReportConfig
 			String json = objectMapper.writeValueAsString(payload);
 			LegacyReportConfig config = objectMapper.readValue(json, LegacyReportConfig.class);
-
+			
 			// Create the report
 			LegacyReportConfig created = reportBuilderService.createLegacyReport(config);
-
+			
 			response.put("success", true);
 			response.put("uuid", created.getUuid());
 			response.put("name", created.getName());
 			response.put("message", "Legacy report created successfully");
-
-		} catch (APIException e) {
+			
+		}
+		catch (APIException e) {
 			response.put("success", false);
 			response.put("error", e.getMessage());
-		} catch (Exception e) {
+		}
+		catch (Exception e) {
 			response.put("success", false);
 			response.put("error", "Failed to create legacy report: " + e.getMessage());
 		}
-
+		
 		return response;
 	}
-
+	
 	/**
 	 * Update an existing legacy report
 	 */
@@ -153,31 +155,33 @@ public class LegacyReportController extends BaseRestController {
 	@ResponseBody
 	public SimpleObject updateLegacyReport(@PathVariable("uuid") String uuid, @RequestBody Map<String, Object> payload) {
 		SimpleObject response = new SimpleObject();
-
+		
 		try {
 			// Convert the payload to LegacyReportConfig
 			String json = objectMapper.writeValueAsString(payload);
 			LegacyReportConfig config = objectMapper.readValue(json, LegacyReportConfig.class);
-
+			
 			// Update the report
 			LegacyReportConfig updated = reportBuilderService.updateLegacyReport(uuid, config);
-
+			
 			response.put("success", true);
 			response.put("uuid", updated.getUuid());
 			response.put("name", updated.getName());
 			response.put("message", "Legacy report updated successfully");
-
-		} catch (APIException e) {
+			
+		}
+		catch (APIException e) {
 			response.put("success", false);
 			response.put("error", e.getMessage());
-		} catch (Exception e) {
+		}
+		catch (Exception e) {
 			response.put("success", false);
 			response.put("error", "Failed to update legacy report: " + e.getMessage());
 		}
-
+		
 		return response;
 	}
-
+	
 	/**
 	 * Delete a legacy report
 	 */
@@ -185,21 +189,23 @@ public class LegacyReportController extends BaseRestController {
 	@ResponseBody
 	public SimpleObject deleteLegacyReport(@PathVariable("uuid") String uuid) {
 		SimpleObject response = new SimpleObject();
-
+		
 		try {
 			reportBuilderService.deleteLegacyReport(uuid);
-
+			
 			response.put("success", true);
 			response.put("message", "Legacy report deleted successfully");
-
-		} catch (APIException e) {
+			
+		}
+		catch (APIException e) {
 			response.put("success", false);
 			response.put("error", e.getMessage());
-		} catch (Exception e) {
+		}
+		catch (Exception e) {
 			response.put("success", false);
 			response.put("error", "Failed to delete legacy report: " + e.getMessage());
 		}
-
+		
 		return response;
 	}
 	
@@ -322,39 +328,39 @@ public class LegacyReportController extends BaseRestController {
 	@ResponseBody
 	public SimpleObject validateLegacyReport(@RequestBody Map<String, Object> payload) {
 		SimpleObject response = new SimpleObject();
-
+		
 		try {
 			// Convert the payload to LegacyReportConfig
 			String json = objectMapper.writeValueAsString(payload);
 			LegacyReportConfig config = objectMapper.readValue(json, LegacyReportConfig.class);
-
+			
 			// Validate using the service
 			ReportValidationResult validationResult = reportBuilderService.validateLegacyReport(config);
-
+			
 			response.put("success", true);
 			response.put("valid", validationResult.isValid());
 			response.put("errors", validationResult.getErrors());
 			response.put("warnings", validationResult.getWarnings());
-
+			
 			// Add SQL validation details
 			SimpleObject sqlValidation = new SimpleObject();
 			sqlValidation.put("passed", validationResult.getSqlValidation().isPassed());
 			sqlValidation.put("sqlErrors", validationResult.getSqlValidation().getSqlErrors());
 			sqlValidation.put("sqlWarnings", validationResult.getSqlValidation().getSqlWarnings());
 			response.put("sqlValidation", sqlValidation);
-
+			
 			// Add basic report info
 			response.put("reportName", config.getName());
 			response.put("parametersCount", config.getParameters() != null ? config.getParameters().size() : 0);
 			response.put("datasetsCount", config.getDataSetDefinitions() != null ? config.getDataSetDefinitions().size() : 0);
-
+			
 		}
 		catch (Exception e) {
 			response.put("success", false);
 			response.put("valid", false);
 			response.put("error", "Failed to validate JSON: " + e.getMessage());
 		}
-
+		
 		return response;
 	}
 }

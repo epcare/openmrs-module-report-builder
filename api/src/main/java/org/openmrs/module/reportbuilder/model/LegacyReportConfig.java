@@ -1,5 +1,6 @@
 package org.openmrs.module.reportbuilder.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.Map;
  * Legacy Report Editor frontend with multi-type indicators, complex disaggregation, and SQL
  * datasets.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class LegacyReportConfig {
 	
 	private String uuid;
@@ -47,6 +49,7 @@ public class LegacyReportConfig {
 	
 	private String dateChanged;
 	
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	public static class Parameter {
 		
 		private String name;
@@ -89,6 +92,7 @@ public class LegacyReportConfig {
 		}
 	}
 	
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	public static class AdvancedFeatures {
 		
 		private IndicatorDataSet indicatorDataSet = new IndicatorDataSet();
@@ -102,6 +106,7 @@ public class LegacyReportConfig {
 		}
 	}
 	
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	public static class IndicatorDataSet {
 		
 		private boolean enabled = false;
@@ -135,6 +140,7 @@ public class LegacyReportConfig {
 		}
 	}
 	
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	public static class Indicator {
 		
 		private String key; // Unique identifier
@@ -242,6 +248,7 @@ public class LegacyReportConfig {
 		}
 	}
 	
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	public static class DimensionDefinition {
 		
 		private String name; // Dimension name (e.g., "age", "gender")
@@ -275,6 +282,7 @@ public class LegacyReportConfig {
 		}
 	}
 	
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	public static class DimensionGroup {
 		
 		private String key; // Group key (e.g., "under_5", "male")
@@ -340,6 +348,7 @@ public class LegacyReportConfig {
 		}
 	}
 	
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	public static class DataSetDefinition {
 		
 		private String name; // Dataset name
@@ -373,6 +382,7 @@ public class LegacyReportConfig {
 		}
 	}
 	
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	public static class DataSetConfig {
 		
 		private String sql; // SQL query for SQL_DATA_SET type

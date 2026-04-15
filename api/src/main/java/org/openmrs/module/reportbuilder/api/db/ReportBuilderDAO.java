@@ -147,27 +147,27 @@ public interface ReportBuilderDAO {
 	ETLSource getETLSourceByUuid(String uuid);
 	
 	ETLSource getETLSourceById(Integer id);
-
+	
 	List<ETLSource> getAllETLSources(boolean includeRetired);
-
+	
 	void deleteETLSource(ETLSource etlSource);
-
+	
 	// Legacy Report CRUD methods
 	LegacyReport saveLegacyReport(LegacyReport legacyReport);
-
+	
 	LegacyReport getLegacyReportByUuid(String uuid);
-
+	
 	LegacyReport getLegacyReportByName(String name);
-
+	
 	List<LegacyReportConfig> getAllLegacyReports();
-
+	
 	List<LegacyReportConfig> getLegacyReportsByCategory(String category);
-
+	
 	List<LegacyReportConfig> getLegacyReportsByStatus(String status);
-
+	
 	List<LegacyReportConfig> searchLegacyReports(String query);
-
+	
 	int getLegacyReportCount();
-
+	
 	void deleteLegacyReport(String uuid);
 }

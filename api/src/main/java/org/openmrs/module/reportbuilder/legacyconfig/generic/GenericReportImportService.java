@@ -7,10 +7,13 @@ import org.openmrs.module.reporting.dataset.definition.DataSetDefinition;
 import org.openmrs.module.reporting.report.definition.ReportDefinition;
 import org.openmrs.module.reporting.report.definition.service.ReportDefinitionService;
 import org.openmrs.module.reportbuilder.api.ReportBuilderService;
+import org.openmrs.module.reportbuilder.api.db.ReportBuilderDAO;
 import org.openmrs.module.reportbuilder.contract.LegacyGenericReportSchema;
+import org.openmrs.module.reportbuilder.model.LegacyReport;
 import org.openmrs.module.reportbuilder.model.ReportBuilderReport;
 import org.openmrs.module.reportbuilder.model.ReportCategory;
 import org.openmrs.module.reportbuilder.util.RuntimeDirectoryResolver;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -36,8 +39,18 @@ public class GenericReportImportService {
 	
 	private final ObjectMapper objectMapper;
 	
+	@Autowired
+	private ReportBuilderDAO reportBuilderDAO;
+	
 	public GenericReportImportService() {
 		this.objectMapper = new ObjectMapper();
+	}
+	
+	/**
+	 * Set the ReportBuilderDAO manually (for non-Spring instantiation)
+	 */
+	public void setReportBuilderDAO(ReportBuilderDAO reportBuilderDAO) {
+		this.reportBuilderDAO = reportBuilderDAO;
 	}
 	
 	/**
@@ -118,6 +131,9 @@ public class GenericReportImportService {
 				// Add to report library
 				addToReportLibrary(saved, jsonReport);
 				
+				// Save to LegacyReport entity
+				saveLegacyReportEntity(jsonReport, saved);
+				
 				return new ReportImportResult(jsonFile.getName(), true, "Report updated successfully");
 			} else {
 				log.info("Creating new report: " + jsonReport.getName() + " (UUID: " + reportDefinition.getUuid() + ")");
@@ -125,6 +141,9 @@ public class GenericReportImportService {
 				
 				// Add to report library
 				addToReportLibrary(saved, jsonReport);
+				
+				// Save to LegacyReport entity
+				saveLegacyReportEntity(jsonReport, saved);
 				
 				return new ReportImportResult(jsonFile.getName(), true, "Report created successfully");
 			}
@@ -604,6 +623,66 @@ public class GenericReportImportService {
 		catch (Exception e) {
 			log.error("Failed to find or create category: {}", categoryName, e);
 			return null;
+		}
+	}
+	
+	/**
+	 * Save the generic report configuration to LegacyReport entity
+	 */
+	private void saveLegacyReportEntity(LegacyGenericReportSchema.ReportDefinition jsonReport,
+	        org.openmrs.module.reporting.report.definition.ReportDefinition reportDefinition) {
+		try {
+			if (reportBuilderDAO == null) {
+				log.warn("ReportBuilderDAO not initialized, skipping LegacyReport entity save");
+				return;
+			}
+			
+			// Check if a legacy report with this UUID already exists
+			LegacyReport existing = reportBuilderDAO.getLegacyReportByUuid(jsonReport.getUuid());
+			if (existing != null) {
+				// Update existing record
+				existing.setName(jsonReport.getName());
+				existing.setDescription(jsonReport.getDescription());
+				existing.setVersion(jsonReport.getVersion());
+				existing.setCategory(jsonReport.getCategory());
+				existing.setSubcategory(jsonReport.getSubcategory());
+				existing.setReportType(jsonReport.getReportType());
+				existing.setReportYear(jsonReport.getReportYear());
+				existing.setReportScope(jsonReport.getReportScope());
+				existing.setStatus("ACTIVE");
+				existing.setDateChanged(new Date());
+				
+				// Update the JSON config
+				String configJson = objectMapper.writeValueAsString(jsonReport);
+				existing.setConfigJson(configJson);
+				
+				reportBuilderDAO.saveLegacyReport(existing);
+				log.debug("Updated LegacyReport entity: {}", jsonReport.getName());
+			} else {
+				// Create new legacy report record
+				LegacyReport legacyReport = new LegacyReport();
+				legacyReport.setUuid(jsonReport.getUuid());
+				legacyReport.setName(jsonReport.getName());
+				legacyReport.setDescription(jsonReport.getDescription());
+				legacyReport.setVersion(jsonReport.getVersion());
+				legacyReport.setCategory(jsonReport.getCategory());
+				legacyReport.setSubcategory(jsonReport.getSubcategory());
+				legacyReport.setReportType(jsonReport.getReportType());
+				legacyReport.setReportYear(jsonReport.getReportYear());
+				legacyReport.setReportScope(jsonReport.getReportScope());
+				legacyReport.setStatus("ACTIVE");
+				
+				// Convert the ReportDefinition to JSON and store it
+				String configJson = objectMapper.writeValueAsString(jsonReport);
+				legacyReport.setConfigJson(configJson);
+				
+				reportBuilderDAO.saveLegacyReport(legacyReport);
+				log.debug("Created LegacyReport entity: {}", jsonReport.getName());
+			}
+		}
+		catch (Exception e) {
+			// Log error but don't fail the import
+			log.error("Error saving legacy report entity: {}", jsonReport.getName(), e);
 		}
 	}
 }
