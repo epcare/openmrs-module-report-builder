@@ -862,4 +862,7 @@
         </insert>
     </changeSet>
 
+    <!-- Legacy Report Schema -->
+    <include file="liquibase/legacy-report-schema.xml" relativeToChangelogFile="true"/>
+
 </databaseChangeLog>

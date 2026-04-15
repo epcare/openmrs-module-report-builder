@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn -f /Users/lubwamasamuel/Projects/mets/openmrs/modules/openmrs-module-report-builder/pom.xml clean compile -DskipTests)",
+      "Bash(mvn -f /Users/lubwamasamuel/Projects/mets/openmrs/modules/openmrs-module-report-builder/omod/pom.xml compile)",
+      "Bash(mvn -f /Users/lubwamasamuel/Projects/mets/openmrs/modules/openmrs-module-report-builder/omod/pom.xml clean compile)",
+      "Bash(mvn -f /Users/lubwamasamuel/Projects/mets/openmrs/modules/openmrs-module-report-builder/omod/pom.xml dependency:tree)",
+      "Bash(mvn clean:*)",
+      "Bash(mvn -f api/pom.xml clean compile -DskipTests)",
+      "Bash(grep -r \"PERSON_ADDRESS\" /Users/lubwamasamuel/openmrs/conceptreview/configuration/reports/generic/*.json)",
+      "Bash(grep -o '\"type\": \"[A-Z_]*\"' /Users/lubwamasamuel/openmrs/conceptreview/configuration/reports/generic/*.json)",
+      "Bash(grep -h '\"dataDefinition\":' /Users/lubwamasamuel/openmrs/conceptreview/configuration/reports/generic/*.json -A 3)",
+      "Bash(grep -v \"\\\\$\")",
+      "Bash(grep -h '\"type\": \"PERSON_ATTRIBUTE\"' /Users/lubwamasamuel/openmrs/conceptreview/configuration/reports/generic/*.json -A 5)",
+      "Bash(git checkout *)",
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git reset *)",
+      "Bash(git commit *)"
+    ]
+  }
+}
