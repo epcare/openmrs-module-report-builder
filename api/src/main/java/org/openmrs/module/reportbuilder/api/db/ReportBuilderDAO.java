@@ -2,6 +2,8 @@ package org.openmrs.module.reportbuilder.api.db;
 
 import org.openmrs.module.reportbuilder.dto.SqlPreviewResult;
 import org.openmrs.module.reportbuilder.model.ETLSource;
+import org.openmrs.module.reportbuilder.model.LegacyReport;
+import org.openmrs.module.reportbuilder.model.LegacyReportConfig;
 import org.openmrs.module.reportbuilder.model.ReportBuilderAgeCategory;
 import org.openmrs.module.reportbuilder.model.ReportBuilderAgeGroup;
 import org.openmrs.module.reportbuilder.model.ReportBuilderDataTheme;
@@ -145,8 +147,27 @@ public interface ReportBuilderDAO {
 	ETLSource getETLSourceByUuid(String uuid);
 	
 	ETLSource getETLSourceById(Integer id);
-	
+
 	List<ETLSource> getAllETLSources(boolean includeRetired);
-	
+
 	void deleteETLSource(ETLSource etlSource);
+
+	// Legacy Report CRUD methods
+	LegacyReport saveLegacyReport(LegacyReport legacyReport);
+
+	LegacyReport getLegacyReportByUuid(String uuid);
+
+	LegacyReport getLegacyReportByName(String name);
+
+	List<LegacyReportConfig> getAllLegacyReports();
+
+	List<LegacyReportConfig> getLegacyReportsByCategory(String category);
+
+	List<LegacyReportConfig> getLegacyReportsByStatus(String status);
+
+	List<LegacyReportConfig> searchLegacyReports(String query);
+
+	int getLegacyReportCount();
+
+	void deleteLegacyReport(String uuid);
 }

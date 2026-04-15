@@ -21,31 +21,11 @@
         <property name="transactionAttributeSource" ref="transactionAttributeSource" />
     </bean>
 
-    <!-- Legacy Report Service and DAO -->
-    <bean id="reportbuilder.HibernateLegacyReportDAO"
-          class="org.openmrs.module.reportbuilder.api.db.hibernate.HibernateLegacyReportDAO">
-        <property name="sessionFactory" ref="dbSessionFactory" />
-    </bean>
-
-    <bean id="reportbuilder.LegacyReportService"
-          class="org.springframework.transaction.interceptor.TransactionProxyFactoryBean">
-        <property name="transactionManager" ref="transactionManager" />
-        <property name="target">
-            <bean class="org.openmrs.module.reportbuilder.api.impl.LegacyReportServiceImpl">
-                <property name="dao" ref="reportbuilder.HibernateLegacyReportDAO" />
-            </bean>
-        </property>
-        <property name="preInterceptors" ref="serviceInterceptors" />
-        <property name="transactionAttributeSource" ref="transactionAttributeSource" />
-    </bean>
-
     <bean parent="serviceContext">
         <property name="moduleService">
             <list>
                 <value>org.openmrs.module.reportbuilder.api.ReportBuilderService</value>
                 <ref bean="reportbuilder.ReportBuilderService" />
-                <value>org.openmrs.module.reportbuilder.api.LegacyReportService</value>
-                <ref bean="reportbuilder.LegacyReportService" />
             </list>
         </property>
     </bean>

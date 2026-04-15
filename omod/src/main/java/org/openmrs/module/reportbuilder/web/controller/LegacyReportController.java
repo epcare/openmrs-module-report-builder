@@ -2,7 +2,7 @@ package org.openmrs.module.reportbuilder.web.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.openmrs.api.APIException;
-import org.openmrs.module.reportbuilder.api.LegacyReportService;
+import org.openmrs.module.reportbuilder.api.ReportBuilderService;
 import org.openmrs.module.reportbuilder.legacyconfig.LegacyReportImporter;
 import org.openmrs.module.reportbuilder.legacyconfig.model.ReportConfig;
 import org.openmrs.module.reportbuilder.model.LegacyReportConfig;
@@ -31,7 +31,7 @@ public class LegacyReportController extends BaseRestController {
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	@Autowired
-	private LegacyReportService legacyReportService;
+	private ReportBuilderService reportBuilderService;
 
 	private final LegacyReportImporter legacyReportImporter = new LegacyReportImporter();
 
@@ -45,7 +45,7 @@ public class LegacyReportController extends BaseRestController {
 	public SimpleObject listLegacyReports() {
 		SimpleObject response = new SimpleObject();
 		try {
-			List<LegacyReportConfig> reports = legacyReportService.getAllLegacyReports();
+			List<LegacyReportConfig> reports = reportBuilderService.getAllLegacyReports();
 
 			List<SimpleObject> results = new ArrayList<>();
 			for (LegacyReportConfig report : reports) {
@@ -79,7 +79,7 @@ public class LegacyReportController extends BaseRestController {
 	public SimpleObject getLegacyReport(@PathVariable("uuid") String uuid) {
 		SimpleObject response = new SimpleObject();
 		try {
-			LegacyReportConfig report = legacyReportService.getLegacyReportByUuid(uuid);
+			LegacyReportConfig report = reportBuilderService.getLegacyReportByUuid(uuid);
 
 			if (report == null) {
 				response.put("uuid", uuid);
@@ -128,7 +128,7 @@ public class LegacyReportController extends BaseRestController {
 			LegacyReportConfig config = objectMapper.readValue(json, LegacyReportConfig.class);
 
 			// Create the report
-			LegacyReportConfig created = legacyReportService.createLegacyReport(config);
+			LegacyReportConfig created = reportBuilderService.createLegacyReport(config);
 
 			response.put("success", true);
 			response.put("uuid", created.getUuid());
@@ -160,7 +160,7 @@ public class LegacyReportController extends BaseRestController {
 			LegacyReportConfig config = objectMapper.readValue(json, LegacyReportConfig.class);
 
 			// Update the report
-			LegacyReportConfig updated = legacyReportService.updateLegacyReport(uuid, config);
+			LegacyReportConfig updated = reportBuilderService.updateLegacyReport(uuid, config);
 
 			response.put("success", true);
 			response.put("uuid", updated.getUuid());
@@ -187,7 +187,7 @@ public class LegacyReportController extends BaseRestController {
 		SimpleObject response = new SimpleObject();
 
 		try {
-			legacyReportService.deleteLegacyReport(uuid);
+			reportBuilderService.deleteLegacyReport(uuid);
 
 			response.put("success", true);
 			response.put("message", "Legacy report deleted successfully");
@@ -329,7 +329,7 @@ public class LegacyReportController extends BaseRestController {
 			LegacyReportConfig config = objectMapper.readValue(json, LegacyReportConfig.class);
 
 			// Validate using the service
-			ReportValidationResult validationResult = legacyReportService.validateLegacyReport(config);
+			ReportValidationResult validationResult = reportBuilderService.validateLegacyReport(config);
 
 			response.put("success", true);
 			response.put("valid", validationResult.isValid());
