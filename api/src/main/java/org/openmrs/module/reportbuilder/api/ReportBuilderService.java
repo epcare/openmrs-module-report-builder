@@ -271,6 +271,13 @@ public interface ReportBuilderService extends OpenmrsService {
 	@Transactional
 	void purgeReportLibrary(ReportLibrary reportLibrary);
 	
+	/**
+	 * Add a generic report to the report library
+	 */
+	@Transactional
+	void addGenericReportToLibrary(String reportDefinitionUuid, String name, String description, String code,
+	        ReportCategory category, ReportBuilderReport.ReportType reportType);
+	
 	@Transactional
 	ETLSource saveETLSource(ETLSource etlSource);
 	
@@ -345,5 +352,88 @@ public interface ReportBuilderService extends OpenmrsService {
 	List<ReportImportResult> importAllRuntimeLegacyReportPackages() throws Exception;
 	
 	void ensureImportAllLegacyReportsTaskExists();
+	
+	// =========================
+	// Legacy Report Import (from LegacyReportImportService)
+	// =========================
+	
+	/**
+	 * Import a single report from a JSON file
+	 * 
+	 * @param jsonFile The JSON configuration file
+	 * @return OpenMRS ReportDefinition
+	 */
+	org.openmrs.module.reporting.report.definition.ReportDefinition importReportFromFile(File jsonFile);
+	
+	/**
+	 * Import a report from JSON string
+	 * 
+	 * @param jsonContent The JSON configuration
+	 * @return OpenMRS ReportDefinition
+	 */
+	org.openmrs.module.reporting.report.definition.ReportDefinition importReportFromJson(String jsonContent);
+	
+	/**
+	 * Import all reports from a directory
+	 * 
+	 * @param reportsDirectory Directory containing JSON report files
+	 * @return List of imported ReportDefinitions
+	 */
+	List<org.openmrs.module.reporting.report.definition.ReportDefinition> importReportsFromDirectory(File reportsDirectory);
+	
+	/**
+	 * Validate that a JSON report file matches its Java contract
+	 * 
+	 * @param jsonFile The JSON configuration file
+	 * @param javaClass The corresponding Java class
+	 * @return validation result with any discrepancies
+	 */
+	org.openmrs.module.reportbuilder.legacyconfig.LegacyReportImporter.ValidationResult validateContract(File jsonFile,
+	        Class<?> javaClass);
+	
+	/**
+	 * Import all UgandaEMRReports legacy reports and convert them to ReportBuilder format
+	 * 
+	 * @param legacyReportsPath Path to UgandaEMRReports legacy directory
+	 * @return List of imported ReportDefinitions
+	 */
+	List<org.openmrs.module.reporting.report.definition.ReportDefinition> importUgandaEMRLegacyReports(
+	        String legacyReportsPath);
+	
+	/**
+	 * Ensure that all legacy reports are imported on module startup
+	 */
+	void ensureLegacyReportsImported();
+	
+	// =========================
+	// Generic Report Import (from GenericReportImportService)
+	// =========================
+	
+	/**
+	 * Import all generic reports from runtime directory
+	 * 
+	 * @return List of import results
+	 */
+	List<org.openmrs.module.reportbuilder.legacyconfig.generic.ReportImportResult> importAllGenericReports();
+	
+	/**
+	 * Import a single generic report from file
+	 * 
+	 * @param jsonFile The JSON file to import
+	 * @return Import result
+	 */
+	org.openmrs.module.reportbuilder.legacyconfig.generic.ReportImportResult importGenericReportFromFile(File jsonFile);
+	
+	/**
+	 * Check if generic reports have already been imported
+	 * 
+	 * @return true if reports are already imported
+	 */
+	boolean areGenericReportsAlreadyImported();
+	
+	/**
+	 * Ensure generic reports import task exists
+	 */
+	void ensureImportAllGenericReportsTaskExists();
 	
 }
