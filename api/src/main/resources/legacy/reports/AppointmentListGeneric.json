@@ -1,0 +1,234 @@
+{
+  "version": "2.0",
+  "uuid": "9c85e20b-c3ce-4dc1-b332-13f1d02f1c5c",
+  "name": "Appointments List",
+  "description": "Lists Patients With Appointments in a particular period",
+  "reportType": "LINE_LIST",
+  "metadata": {
+    "category": "appointment",
+    "tags": ["clinical", "hiv", "art"],
+    "retired": false
+  },
+  "parameters": {
+    "parameters": [
+      {
+        "name": "startDate",
+        "label": "Start Date",
+        "type": "DATE"
+      },
+      {
+        "name": "endDate",
+        "label": "End Date",
+        "type": "DATE"
+      },
+      {
+        "name": "location",
+        "label": "Location",
+        "type": "LOCATION"
+      }
+    ]
+  },
+  "dataSet": {
+    "name": "APPOINTMENT_LIST",
+    "rowFilter": {
+      "type": "SQL",
+      "config": {
+        "sql": "SELECT patient_id FROM obs WHERE concept_id = (SELECT concept_id FROM concept WHERE uuid = 'a8a6b966-1321-4e36-9f08-7dd46c3f5b75') AND encounter_type IN (SELECT encounter_type_id FROM encounter_type WHERE uuid IN ('e2793398-1d5f-11e0-b929-000c29ad1d07')) AND obs_datetime BETWEEN :startDate AND :endDate AND location_id = COALESCE(:location, location_id) GROUP BY patient_id"
+      }
+    },
+    "columns": [
+      {
+        "name": "Clinic No",
+        "key": "clinicNo",
+        "dataDefinition": {
+          "type": "IDENTIFIER",
+          "config": {
+            "identifierTypeUuid": "e2b9e7f8-1d5f-11e0-b929-000c29ad1d07",
+            "preferred": true
+          }
+        }
+      },
+      {
+        "name": "EID No",
+        "key": "eidNo",
+        "dataDefinition": {
+          "type": "IDENTIFIER",
+          "config": {
+            "identifierTypeUuid": "3d3f8b7a-1d5f-11e0-b929-000c29ad1d07",
+            "preferred": false
+          }
+        }
+      },
+      {
+        "name": "Patient Name",
+        "key": "patientName",
+        "dataDefinition": {
+          "type": "PERSON_ATTRIBUTE",
+          "config": {
+            "attributeTypeUuid": "8d871eae-1d5f-11e0-b929-000c29ad1d07"
+          }
+        },
+        "converter": {
+          "type": "OBJECT_FORMATTER"
+        }
+      },
+      {
+        "name": "Sex",
+        "key": "sex",
+        "dataDefinition": {
+          "type": "GENDER"
+        }
+      },
+      {
+        "name": "Birth Date",
+        "key": "birthDate",
+        "dataDefinition": {
+          "type": "BIRTHDATE"
+        },
+        "converter": {
+          "type": "BIRTHDATE_AGE",
+          "config": {
+            "format": "dd-MMM-yyyy"
+          }
+        }
+      },
+      {
+        "name": "Age",
+        "key": "age",
+        "dataDefinition": {
+          "type": "BIRTHDATE"
+        },
+        "converter": {
+          "type": "BIRTHDATE_AGE",
+          "config": {
+            "format": "age"
+          }
+        }
+      },
+      {
+        "name": "Parish",
+        "key": "parish",
+        "dataDefinition": {
+          "type": "SQL",
+          "config": {
+            "sql": "SELECT value_text FROM person_address WHERE person_id = :patientId AND preferred = 1 LIMIT 1"
+          }
+        }
+      },
+      {
+        "name": "Village",
+        "key": "village",
+        "dataDefinition": {
+          "type": "SQL",
+          "config": {
+            "sql": "SELECT value_text FROM person_address WHERE person_id = :patientId AND preferred = 1 LIMIT 1"
+          }
+        }
+      },
+      {
+        "name": "ART Start Date",
+        "key": "artStartDate",
+        "dataDefinition": {
+          "type": "SQL",
+          "config": {
+            "sql": "SELECT MIN(start_date) FROM patient_program WHERE program_id = (SELECT program_id FROM program WHERE uuid = 'da5a7e66-1d5f-11e0-b929-000c29ad1d07') AND patient_id = :patientId"
+          }
+        },
+        "converter": {
+          "type": "NULL_VALUE",
+          "config": {
+            "nullReplacement": ""
+          }
+        }
+      },
+      {
+        "name": "Current Regimen",
+        "key": "currentRegimen",
+        "dataDefinition": {
+          "type": "SQL",
+          "config": {
+            "sql": "SELECT name FROM drug_order WHERE patient_id = :patientId AND voided = 0 ORDER BY start_date DESC LIMIT 1"
+          }
+        }
+      },
+      {
+        "name": "VL Date",
+        "key": "vlDate",
+        "dataDefinition": {
+          "type": "SQL",
+          "config": {
+            "sql": "SELECT obs_datetime FROM obs WHERE concept_id = (SELECT concept_id FROM concept WHERE uuid = 'vl-concept-uuid') AND patient_id = :patientId ORDER BY obs_datetime DESC LIMIT 1"
+          }
+        }
+      },
+      {
+        "name": "VL Quantitative",
+        "key": "vlQuantitative",
+        "dataDefinition": {
+          "type": "SQL",
+          "config": {
+            "sql": "SELECT value_numeric FROM obs WHERE concept_id = (SELECT concept_id FROM concept WHERE uuid = 'vl-concept-uuid') AND patient_id = :patientId ORDER BY obs_datetime DESC LIMIT 1"
+          }
+        }
+      },
+      {
+        "name": "VL Qualitative",
+        "key": "vlQualitative",
+        "dataDefinition": {
+          "type": "SQL",
+          "config": {
+            "sql": "SELECT value_coded_name_id FROM obs WHERE concept_id = (SELECT concept_id FROM concept WHERE uuid = 'vl-concept-uuid') AND patient_id = :patientId ORDER BY obs_datetime DESC LIMIT 1"
+          }
+        }
+      },
+      {
+        "name": "DSDM Model",
+        "key": "dsdmModel",
+        "dataDefinition": {
+          "type": "SQL",
+          "config": {
+            "sql": "SELECT value_text FROM obs WHERE concept_id = (SELECT concept_id FROM concept WHERE uuid = 'dsdm-concept-uuid') AND patient_id = :patientId AND obs_datetime BETWEEN :startDate AND :endDate ORDER BY obs_datetime DESC LIMIT 1"
+          }
+        }
+      },
+      {
+        "name": "DSDM Model Enrollment Date",
+        "key": "dsdmEnrollmentDate",
+        "dataDefinition": {
+          "type": "SQL",
+          "config": {
+            "sql": "SELECT MIN(obs_datetime) FROM obs WHERE concept_id = (SELECT concept_id FROM concept WHERE uuid = 'dsdm-concept-uuid') AND patient_id = :patientId"
+          }
+        }
+      },
+      {
+        "name": "Appointment Date",
+        "key": "appointmentDate",
+        "dataDefinition": {
+          "type": "SQL",
+          "config": {
+            "sql": "SELECT value_datetime FROM obs WHERE concept_id = (SELECT concept_id FROM concept WHERE uuid = 'a8a6b966-1321-4e36-9f08-7dd46c3f5b75') AND encounter_type IN (SELECT encounter_type_id FROM encounter_type WHERE uuid IN ('e2793398-1d5f-11e0-b929-000c29ad1d07')) AND patient_id = :patientId AND obs_datetime BETWEEN :startDate AND :endDate"
+          }
+        }
+      },
+      {
+        "name": "Telephone",
+        "key": "telephone",
+        "dataDefinition": {
+          "type": "PERSON_ATTRIBUTE",
+          "config": {
+            "attributeTypeUuid": "telephone-attribute-uuid"
+          }
+        }
+      }
+    ]
+  },
+  "design": {
+    "type": "excel",
+    "template": "AppointmentList.xls",
+    "properties": {
+      "repeatingSections": "sheet:1,row:8,dataset:APPOINTMENT_LIST",
+      "sortWeight": "5000"
+    }
+  }
+}

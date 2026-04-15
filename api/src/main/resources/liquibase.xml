@@ -839,4 +839,27 @@
         </createIndex>
     </changeSet>
 
+    <changeSet id="reportbuilder-20260412-01-import-generic-reports-task" author="slubwama">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM scheduler_task_config
+                WHERE schedulable_class = 'org.openmrs.module.reportbuilder.tasks.ImportAllGenericReportsTask'
+            </sqlCheck>
+        </preConditions>
+        <comment>Scheduled task for importing all generic reports from runtime directory</comment>
+        <insert tableName="scheduler_task_config">
+            <column name="name" value="Import All Generic Reports" />
+            <column name="description" value="Imports all generic reports from the external runtime directory into the OpenMRS database" />
+            <column name="schedulable_class" value="org.openmrs.module.reportbuilder.tasks.ImportAllGenericReportsTask" />
+            <column name="start_time_pattern" value="MM/dd/yyyy HH:mm:ss" />
+            <column name="start_time" valueDate="2023-01-15T19:44:15" />
+            <column name="repeat_interval" value="86400" />
+            <column name="date_created" valueDate="CURRENT_TIMESTAMP" />
+            <column name="created_by" value="1" />
+            <column name="start_on_startup" value="1"/>
+            <column name="started" value="1"/>
+            <column name="uuid" value="a7b3c8d4-e9f2-4a1c-8b5d-6e7f8a9b0c1d" />
+        </insert>
+    </changeSet>
+
 </databaseChangeLog>

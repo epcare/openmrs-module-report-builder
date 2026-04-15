@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Column Config",
+  "type": "object",
+  "required": ["key", "label", "indicator"],
+  "properties": {
+    "key": { "type": "string" },
+    "label": { "type": "string" },
+    "indicator": { "$ref": "indicator.schema.json" },
+    "dimensionOptions": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}

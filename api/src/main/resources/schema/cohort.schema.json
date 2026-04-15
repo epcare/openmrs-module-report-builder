@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cohort Config",
+  "type": "object",
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "sql",
+        "codedObsDuringPeriod",
+        "numericObsDuringPeriod",
+        "composition",
+        "reference"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "query": {
+      "type": "string"
+    },
+    "question": {
+      "type": "string"
+    },
+    "encounterTypeRef": {
+      "type": "string"
+    },
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "timeModifier": {
+      "type": "string",
+      "enum": [
+        "ANY",
+        "FIRST",
+        "LAST"
+      ]
+    },
+    "comparator": {
+      "type": "string",
+      "enum": [
+        "LESS_THAN",
+        "LESS_EQUAL",
+        "EQUAL",
+        "GREATER_EQUAL",
+        "GREATER_THAN"
+      ]
+    },
+    "value": {
+      "type": "number"
+    },
+    "composition": {
+      "type": "string"
+    },
+    "searches": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "ref": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "sql"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "codedObsDuringPeriod"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "question",
+          "encounterTypeRef",
+          "answers",
+          "timeModifier"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "numericObsDuringPeriod"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "question",
+          "encounterTypeRef",
+          "comparator",
+          "value",
+          "timeModifier"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "composition"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "composition",
+          "searches"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "reference"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "ref"
+        ]
+      }
+    }
+  ]
+}

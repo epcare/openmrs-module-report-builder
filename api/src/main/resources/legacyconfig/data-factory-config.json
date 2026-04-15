@@ -1,0 +1,192 @@
+{
+  "concepts": {
+    "hiv.return_visit_date": {
+      "resolver": "conceptUuid",
+      "value": "dcac04cf-30ab-102d-86b0-7a5022ba4115"
+    },
+    "hiv.art_start_date": {
+      "resolver": "conceptUuid",
+      "value": "ab505422-26d9-41f1-a079-c3d222000440"
+    },
+    "hiv.viral_load_date": {
+      "resolver": "conceptUuid",
+      "value": "0b434cfa-b11c-4d14-aaa2-9aed6ca2da88"
+    },
+    "hiv.current_regimen": {
+      "resolver": "conceptUuid",
+      "value": "dd2b0b4d-30ab-102d-86b0-7a5022ba4115"
+    },
+    "hiv.current_viral_load": {
+      "resolver": "conceptUuid",
+      "value": "dc8d83e3-30ab-102d-86b0-7a5022ba4115"
+    },
+    "hiv.adherence": {
+      "resolver": "conceptUuid",
+      "value": "dce03b2f-30ab-102d-86b0-7a5022ba4115"
+    },
+    "hiv.good_adherence": {
+      "resolver": "conceptUuid",
+      "value": "dcdf1708-30ab-102d-86b0-7a5022ba4115"
+    },
+    "hiv.fair_adherence": {
+      "resolver": "conceptUuid",
+      "value": "dcdf1b36-30ab-102d-86b0-7a5022ba4115"
+    },
+    "hiv.poor_adherence": {
+      "resolver": "conceptUuid",
+      "value": "dcdf1f4a-30ab-102d-86b0-7a5022ba4115"
+    },
+    "hiv.viral_load_qualitative": {
+      "resolver": "conceptUuid",
+      "value": "dca12261-30ab-102d-86b0-7a5022ba4115"
+    },
+    "hiv.vl_copies": {
+      "resolver": "conceptUuid",
+      "value": "dc8d83e3-30ab-102d-86b0-7a5022ba4115"
+    },
+    "hiv.edd": {
+      "resolver": "conceptUuid",
+      "value": "dcc033e5-30ab-102d-86b0-7a5022ba4115"
+    },
+    "hiv.cd4": {
+      "resolver": "conceptUuid",
+      "value": "dcbcba2c-30ab-102d-86b0-7a5022ba4115"
+    }
+  },
+  "encounterTypes": {
+    "hiv.art_encounter": {
+      "resolver": "encounterTypeUuid",
+      "value": "8d5b2be0-c2cc-11de-8d13-0010c6dffd0f"
+    },
+    "hiv.art_summary_encounter": {
+      "resolver": "encounterTypeUuid",
+      "value": "8d5b27bc-c2cc-11de-8d13-0010c6dffd0f"
+    },
+    "hiv.back_to_care_encounter": {
+      "resolver": "encounterTypeUuid",
+      "value": "791faefd-36b8-482f-ab78-20c297b03851"
+    },
+    "hiv.regimen_change_encounter": {
+      "resolver": "encounterTypeUuid",
+      "value": "c11774c1-3b4a-4bdb-a847-6060895e006d"
+    },
+    "hiv.medication_dispensing_encounter": {
+      "resolver": "encounterTypeUuid",
+      "value": "22902411-19c1-4a02-b19a-bf1a9c24fd51"
+    },
+    "hiv.iac_encounter": {
+      "resolver": "encounterTypeUuid",
+      "value": "38cb2232-30fc-4b1f-8df1-47c795771ee9"
+    }
+  },
+  "patientDataSources": {
+    "person.preferred_name": {
+      "resolver": "builtinPatientData",
+      "type": "preferred-name"
+    },
+    "patient.gender": {
+      "resolver": "builtinPatientData",
+      "type": "gender"
+    },
+    "patient.birthdate": {
+      "resolver": "builtinPatientData",
+      "type": "birthdate"
+    },
+    "patient.address.address4": {
+      "resolver": "personAddressProperty",
+      "property": "address4"
+    },
+    "patient.address.address5": {
+      "resolver": "personAddressProperty",
+      "property": "address5"
+    },
+    "patient.telephone": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "patient.telephone"
+    },
+    "hiv.clinic_number": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "hiv.clinic_number"
+    },
+    "hiv.eid_number": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "hiv.eid_number"
+    },
+    "hiv.age_during_period": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "hiv.age_during_period"
+    },
+    "hiv.art_start_date": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "hiv.art_start_date"
+    },
+    "hiv.current_regimen": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "hiv.current_regimen"
+    },
+    "hiv.viral_load_date": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "hiv.viral_load_date"
+    },
+    "hiv.current_viral_load": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "hiv.current_viral_load"
+    },
+    "hiv.vl_qualitative_by_end_date": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "hiv.vl_qualitative_by_end_date"
+    },
+    "hiv.dsdm_model": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "hiv.dsdm_model"
+    },
+    "hiv.dsdm_enrollment_date": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "hiv.dsdm_enrollment_date"
+    },
+    "hiv.expected_return_date_during_period_at_location": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "hiv.expected_return_date_during_period_at_location"
+    }
+  },
+  "converters": {
+    "birth-date": {
+      "resolver": "providerKey",
+      "provider": "ugandaemr",
+      "key": "converter.birth-date"
+    }
+  },
+  "rowFilters": {
+    "obs-value-date-between": {
+      "resolver": "typedRowFilter",
+      "type": "obsValueDateBetween",
+      "supportsLocation": true,
+      "arguments": {
+        "question": {
+          "resolver": "concept"
+        },
+        "encounterTypes": {
+          "resolver": "encounterType",
+          "multiple": true
+        },
+        "timeModifier": {
+          "resolver": "enum",
+          "enum": "BaseObsCohortDefinition.TimeModifier"
+        }
+      }
+    }
+  },
+  "dimensions": {}
+}

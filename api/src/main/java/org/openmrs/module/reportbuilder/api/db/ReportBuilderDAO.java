@@ -134,6 +134,10 @@ public interface ReportBuilderDAO {
 	
 	long getReportLibrariesCount(String q, boolean includeRetired);
 	
+	ReportLibrary getReportLibraryByReportDefinitionUuid(String reportDefinitionUuid);
+	
+	ReportLibrary getReportLibraryByBuilderReportUuid(String builderReportUuid);
+	
 	void purgeReportLibrary(ReportLibrary reportLibrary);
 	
 	ETLSource saveETLSource(ETLSource etlSource);

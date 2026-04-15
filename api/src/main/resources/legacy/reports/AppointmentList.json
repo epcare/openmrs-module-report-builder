@@ -1,0 +1,199 @@
+{
+  "version": "1.0",
+  "uuid": "9c85e20b-c3ce-4dc1-b332-13f1d02f1c5c",
+  "name": "Appointments List",
+  "description": "Lists Patients With Appointments in a particular period",
+  "reportType": "LINE_LIST",
+  "metadata": {
+    "category": "appointment",
+    "tags": ["clinical", "hiv", "art"],
+    "retired": false
+  },
+  "parameters": {
+    "parameters": [
+      {
+        "name": "startDate",
+        "label": "Start Date",
+        "type": "java.util.Date"
+      },
+      {
+        "name": "endDate",
+        "label": "End Date",
+        "type": "java.util.Date"
+      },
+      {
+        "name": "location",
+        "label": "Location",
+        "type": "org.openmrs.Location"
+      }
+    ]
+  },
+  "dataSet": {
+    "name": "APPOINTMENT_LIST",
+    "rowFilter": {
+      "type": "custom",
+      "className": "org.openmrs.module.ugandaemrreports.library.DataFactory$PatientsWhoseObsValueDateIsBetweenStartDateAndEndDateAtLocation",
+      "parameters": {
+        "concept": "a8a6b966-1321-4e36-9f08-7dd46c3f5b75",
+        "encounterTypes": ["e2793398-1d5f-11e0-b929-000c29ad1d07"],
+        "timeModifier": "ANY"
+      }
+    },
+    "columns": [
+      {
+        "name": "Clinic No",
+        "key": "clinicNo",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.HIVPatientDataLibrary$ClinicNumberDataDefinition"
+        }
+      },
+      {
+        "name": "EID No",
+        "key": "eidNo",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.HIVPatientDataLibrary$EIDNumberDataDefinition"
+        }
+      },
+      {
+        "name": "Patient Name",
+        "key": "patientName",
+        "dataDefinition": {
+          "type": "person",
+          "propertyName": "preferredName"
+        }
+      },
+      {
+        "name": "Sex",
+        "key": "sex",
+        "dataDefinition": {
+          "type": "patient",
+          "propertyName": "gender"
+        }
+      },
+      {
+        "name": "Birth Date",
+        "key": "birthDate",
+        "dataDefinition": {
+          "type": "patient",
+          "propertyName": "birthdate"
+        },
+        "converter": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.definition.data.converter.BirthDateConverter"
+        }
+      },
+      {
+        "name": "Age",
+        "key": "age",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.HIVPatientDataLibrary$AgeDuringPeriodDataDefinition"
+        }
+      },
+      {
+        "name": "Parish",
+        "key": "parish",
+        "dataDefinition": {
+          "type": "person",
+          "propertyName": "preferredAddress",
+          "config": {
+            "addressField": "address4"
+          }
+        }
+      },
+      {
+        "name": "Village",
+        "key": "village",
+        "dataDefinition": {
+          "type": "person",
+          "propertyName": "preferredAddress",
+          "config": {
+            "addressField": "address5"
+          }
+        }
+      },
+      {
+        "name": "ART Start Date",
+        "key": "artStartDate",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.HIVPatientDataLibrary$ArtStartDateDataDefinition"
+        }
+      },
+      {
+        "name": "Current Regimen",
+        "key": "currentRegimen",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.HIVPatientDataLibrary$CurrentRegimenDataDefinition"
+        }
+      },
+      {
+        "name": "VL Date",
+        "key": "vlDate",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.HIVPatientDataLibrary$ViralLoadDateDataDefinition"
+        }
+      },
+      {
+        "name": "VL Quantitative",
+        "key": "vlQuantitative",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.HIVPatientDataLibrary$CurrentViralLoadDataDefinition"
+        }
+      },
+      {
+        "name": "VL Qualitative",
+        "key": "vlQualitative",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.HIVPatientDataLibrary$VLQualitativeByEndDateDataDefinition"
+        }
+      },
+      {
+        "name": "DSDM Model",
+        "key": "dsdmModel",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.HIVPatientDataLibrary$DSDMModelDataDefinition"
+        }
+      },
+      {
+        "name": "DSDM Model Enrollment Date",
+        "key": "dsdmEnrollmentDate",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.HIVPatientDataLibrary$DSDMEnrollmentDateDataDefinition"
+        }
+      },
+      {
+        "name": "Appointment Date",
+        "key": "appointmentDate",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.HIVPatientDataLibrary$ExpectedReturnDateDuringPeriodAtLocationDataDefinition"
+        }
+      },
+      {
+        "name": "Telephone",
+        "key": "telephone",
+        "dataDefinition": {
+          "type": "custom",
+          "className": "org.openmrs.module.ugandaemrreports.library.BasePatientDataLibrary$TelephoneDataDefinition"
+        }
+      }
+    ]
+  },
+  "design": {
+    "type": "excel",
+    "template": "AppointmentList.xls",
+    "properties": {
+      "repeatingSections": "sheet:1,row:8,dataset:APPOINTMENT_LIST",
+      "sortWeight": "5000"
+    }
+  }
+}

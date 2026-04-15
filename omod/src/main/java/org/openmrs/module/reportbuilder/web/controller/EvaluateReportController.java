@@ -38,125 +38,125 @@ import java.util.Iterator;
 
 @RestController
 @RequestMapping(value = "/rest/" + RestConstants.VERSION_1 + EvaluateReportController.REPORTBUILDER
-		+ EvaluateReportController.SET)
+        + EvaluateReportController.SET)
 public class EvaluateReportController {
-
+	
 	public static final String REPORTBUILDER = "/reportbuilder";
-
+	
 	public static final String SET = "/reportingDefinition";
-
+	
 	@Autowired
 	public GenericConversionService conversionService;
-
+	
 	@Autowired
 	public ReportService reportService;
-
+	
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
 	public Object getReportData(HttpServletRequest request, @RequestParam(value = "uuid") String reportDefinitionUuid,
-								@RequestParam(required = false, value = "renderType") String renderType) {
+	        @RequestParam(required = false, value = "renderType") String renderType) {
 		try {
 			String normalizedRenderType = normalizeRenderType(renderType);
-
+			
 			String endDateStr = request.getParameter("endDate");
 			if (endDateStr != null && !endDateStr.trim().isEmpty() && !validateDateIsValidFormat(endDateStr)) {
 				SimpleObject message = new SimpleObject();
 				message.put("error", "given date " + endDateStr + " is not valid");
 				return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON).body(message);
 			}
-
+			
 			ReportDefinitionService reportDefinitionService = Context.getService(ReportDefinitionService.class);
 			ReportDefinition reportDefinition = reportDefinitionService.getDefinitionByUuid(reportDefinitionUuid);
-
+			
 			if (reportDefinition == null) {
 				return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
-						.body("{\"error\":\"ReportDefinition not found\"}");
+				        .body("{\"error\":\"ReportDefinition not found\"}");
 			}
-
+			
 			EvaluationContext evaluationContext = new EvaluationContext();
 			evaluationContext.setParameterValues(resolveParameterValues(request, reportDefinition));
-
+			
 			ReportData reportData = reportDefinitionService.evaluate(reportDefinition, evaluationContext);
-
+			
 			if ("list".equals(normalizedRenderType)) {
 				Map<String, List<SimpleObject>> out = new HashMap<String, List<SimpleObject>>();
 				for (Map.Entry<String, DataSet> e : reportData.getDataSets().entrySet()) {
 					out.put(e.getKey(), convertDataSetToSimpleObject(e.getValue()));
 				}
-
+				
 				return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(out);
 			}
-
+			
 			ReportBuilderService reportBuilderService = Context.getService(ReportBuilderService.class);
-
+			
 			if ("json".equals(normalizedRenderType) || "html".equals(normalizedRenderType)) {
 				ReportDesign jsonDesign = findReportDesign(reportDefinition, "JSON");
 				if (jsonDesign == null) {
 					return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.APPLICATION_JSON)
-							.body("{\"error\":\"No JSON design found\"}");
+					        .body("{\"error\":\"No JSON design found\"}");
 				}
-
+				
 				if ("html".equals(normalizedRenderType)) {
 					String rendered = reportBuilderService.buildRenderedOutput(reportData, jsonDesign, null);
 					return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.TEXT_HTML).body(rendered);
 				}
-
+				
 				Date endDate = null;
 				if (endDateStr != null && !endDateStr.trim().isEmpty()) {
 					endDate = new SimpleDateFormat("yyyy-MM-dd").parse(endDateStr);
 				}
-
-				String payload = (endDate != null)
-						? reportBuilderService.buildFinalPayloadJson(reportData, jsonDesign, "json", endDate)
-						: reportBuilderService.buildPayloadJson(reportData, jsonDesign, "json");
-
+				
+				String payload = (endDate != null) ? reportBuilderService.buildFinalPayloadJson(reportData, jsonDesign,
+				    "json", endDate) : reportBuilderService.buildPayloadJson(reportData, jsonDesign, "json");
+				
 				return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(payload);
 			}
-
+			
 			if ("excel".equals(normalizedRenderType)) {
 				ReportDesign excelDesign = findExcelDesign(reportDefinition);
 				if (excelDesign == null) {
 					return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.APPLICATION_JSON)
-							.body("{\"error\":\"No Excel design found\"}");
+					        .body("{\"error\":\"No Excel design found\"}");
 				}
-
+				
 				SimpleObject out = new SimpleObject();
 				out.put("message", "Excel design found");
 				out.put("designUuid", excelDesign.getUuid());
 				out.put("designName", excelDesign.getName());
-				out.put("note", "Excel rendering endpoint is recognized, but binary streaming is not yet implemented in this controller.");
-
+				out.put("note",
+				    "Excel rendering endpoint is recognized, but binary streaming is not yet implemented in this controller.");
+				
 				return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(out);
 			}
-
+			
 			return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
-					.body("{\"error\":\"Unsupported renderType. Use list, json, html, or excel\"}");
-
+			        .body("{\"error\":\"Unsupported renderType. Use list, json, html, or excel\"}");
+			
 		}
 		catch (Exception e) {
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.APPLICATION_JSON)
-					.body("{\"error\":\"" + e.getMessage() + "\"}");
+			        .body("{\"error\":\"" + e.getMessage() + "\"}");
 		}
 	}
-
+	
 	private String normalizeRenderType(String renderType) {
 		if (renderType == null || renderType.trim().isEmpty()) {
 			return "list";
 		}
-
+		
 		String rt = renderType.trim().toLowerCase();
 		if ("xls".equals(rt) || "xlsx".equals(rt)) {
 			return "excel";
 		}
 		return rt;
 	}
-
+	
 	private ReportDesign findReportDesign(ReportDefinition reportDefinition, String designName) {
 		List<ReportDesign> designs = reportService.getReportDesigns(reportDefinition, null, false);
 		if (designs == null) {
 			return null;
 		}
-
+		
 		for (ReportDesign design : designs) {
 			if (designName.equalsIgnoreCase(design.getName())) {
 				return design;
@@ -164,72 +164,71 @@ public class EvaluateReportController {
 		}
 		return null;
 	}
-
+	
 	private ReportDesign findExcelDesign(ReportDefinition reportDefinition) {
 		List<ReportDesign> designs = reportService.getReportDesigns(reportDefinition, null, false);
 		if (designs == null) {
 			return null;
 		}
-
+		
 		for (ReportDesign design : designs) {
 			String name = design.getName() != null ? design.getName().trim().toLowerCase() : "";
 			if ("excel".equals(name) || "xls".equals(name) || "xlsx".equals(name)) {
 				return design;
 			}
 		}
-
+		
 		for (ReportDesign design : designs) {
 			String rendererType = design.getRendererType() != null ? design.getRendererType().getName().trim() : "";
 			if (rendererType.contains("XlsReportRenderer")) {
 				return design;
 			}
 		}
-
+		
 		return null;
 	}
-
+	
 	private Map<String, Object> resolveParameterValues(HttpServletRequest request, ReportDefinition rd) {
 		Map<String, Object> vals = new HashMap<String, Object>();
-
+		
 		for (Parameter p : rd.getParameters()) {
 			String name = p.getName();
 			String submitted = request.getParameter(name);
-
+			
 			if (p.getCollectionType() != null) {
 				throw new IllegalStateException("Collection parameter not supported yet: " + name);
 			}
-
+			
 			Object converted = null;
 			boolean hasValue = submitted != null && !submitted.trim().isEmpty();
-
+			
 			if (!hasValue) {
 				converted = p.getDefaultValue();
-			}
-			else {
+			} else {
 				converted = convertParameterValue(submitted.trim(), p.getType());
 			}
-
+			
 			if (converted == null && p.getDefaultValue() == null && p.isRequired()) {
 				throw new IllegalArgumentException("Missing required parameters: " + name);
 			}
-
+			
 			vals.put(name, converted);
 		}
-
+		
 		return vals;
 	}
-
+	
 	private Object convertParameterValue(String submitted, Class<?> targetType) {
 		if (submitted == null) {
 			return null;
 		}
-
+		
 		if (Date.class.isAssignableFrom(targetType)) {
 			Date d = tryParseDate(submitted);
 			if (d != null) {
 				return d;
 			}
-
+			
 			try {
 				return DateUtil.parseYmd(submitted);
 			}
@@ -237,16 +236,15 @@ public class EvaluateReportController {
 				return null;
 			}
 		}
-
+		
 		try {
 			Object converted = conversionService.convert(submitted, targetType);
 			if (converted != null) {
 				return converted;
 			}
 		}
-		catch (Exception ignore) {
-		}
-
+		catch (Exception ignore) {}
+		
 		try {
 			if (Integer.class.equals(targetType) || int.class.equals(targetType)) {
 				return Integer.valueOf(submitted);
@@ -267,10 +265,10 @@ public class EvaluateReportController {
 		catch (Exception ignore) {
 			return null;
 		}
-
+		
 		return null;
 	}
-
+	
 	private Date tryParseDate(String value) {
 		List<String> patterns = new ArrayList<String>();
 		patterns.add("yyyy-MM-dd");
@@ -278,19 +276,18 @@ public class EvaluateReportController {
 		patterns.add("yyyy-MM-dd'T'HH:mm:ss.SSS");
 		patterns.add("dd/MM/yyyy");
 		patterns.add("MM/dd/yyyy");
-
+		
 		for (String pattern : patterns) {
 			try {
 				SimpleDateFormat sdf = new SimpleDateFormat(pattern);
 				sdf.setLenient(false);
 				return sdf.parse(value);
 			}
-			catch (ParseException ignored) {
-			}
+			catch (ParseException ignored) {}
 		}
 		return null;
 	}
-
+	
 	private boolean validateDateIsValidFormat(String date) {
 		try {
 			DateUtil.parseYmd(date);
@@ -300,13 +297,13 @@ public class EvaluateReportController {
 			return false;
 		}
 	}
-
+	
 	private List<SimpleObject> convertDataSetToSimpleObject(DataSet d) {
 		List<SimpleObject> rows = new ArrayList<SimpleObject>();
 		if (d == null) {
 			return rows;
 		}
-
+		
 		Iterator it = d.iterator();
 		while (it.hasNext()) {
 			DataSetRow r = (DataSetRow) it.next();

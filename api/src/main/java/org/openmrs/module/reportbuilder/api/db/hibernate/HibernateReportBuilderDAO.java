@@ -813,6 +813,18 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 		return count == null ? 0 : count.longValue();
 	}
 	
+	public ReportLibrary getReportLibraryByReportDefinitionUuid(String reportDefinitionUuid) {
+		Criteria c = getSession().createCriteria(ReportLibrary.class);
+		c.add(Restrictions.eq("reportDefinitionUuid", reportDefinitionUuid));
+		return (ReportLibrary) c.uniqueResult();
+	}
+	
+	public ReportLibrary getReportLibraryByBuilderReportUuid(String builderReportUuid) {
+		Criteria c = getSession().createCriteria(ReportLibrary.class);
+		c.add(Restrictions.eq("reportBuilderReportUuid", builderReportUuid));
+		return (ReportLibrary) c.uniqueResult();
+	}
+	
 	public void purgeReportLibrary(ReportLibrary reportLibrary) {
 		getSession().delete(reportLibrary);
 	}
