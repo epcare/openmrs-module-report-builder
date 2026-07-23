@@ -58,7 +58,7 @@ public class ReportBuilderSectionPreviewResource extends DelegatingCrudResource<
 	}
 	
 	@Override
-	protected PageableResult doGetAll(RequestContext context) throws ResponseException {
+	protected PageableResult doGetAll(RequestContext context) {
 		return new AlreadyPaged<SectionPreviewRequest>(context, Collections.<SectionPreviewRequest> emptyList(), false);
 	}
 	
@@ -76,7 +76,7 @@ public class ReportBuilderSectionPreviewResource extends DelegatingCrudResource<
 	public DelegatingResourceDescription getCreatableProperties() {
 		DelegatingResourceDescription d = new DelegatingResourceDescription();
 		d.addRequiredProperty("sectionUuid");
-		d.addRequiredProperty("startDate");
+		d.addProperty("startDate"); // Optional - if not provided, returns all data from earliest time
 		d.addRequiredProperty("endDate");
 		d.addProperty("indicatorUuid");
 		d.addProperty("maxRows");
@@ -96,11 +96,14 @@ public class ReportBuilderSectionPreviewResource extends DelegatingCrudResource<
 		if (isBlank(sectionUuid)) {
 			throw new IllegalArgumentException("sectionUuid is required");
 		}
-		if (isBlank(startDate)) {
-			throw new IllegalArgumentException("startDate is required (YYYY-MM-DD)");
-		}
 		if (isBlank(endDate)) {
 			throw new IllegalArgumentException("endDate is required (YYYY-MM-DD)");
+		}
+		
+		// If startDate is not provided, use a default early date to return all data "ever since"
+		String effectiveStartDate = startDate;
+		if (isBlank(startDate)) {
+			effectiveStartDate = "1900-01-01"; // Use a very early date to represent "all time"
 		}
 		
 		Map<String, Object> params = new HashMap<String, Object>();
@@ -114,7 +117,7 @@ public class ReportBuilderSectionPreviewResource extends DelegatingCrudResource<
 			}
 		}
 		
-		params.put("startDate", startDate);
+		params.put("startDate", effectiveStartDate);
 		params.put("endDate", endDate);
 		
 		Integer maxRows = null;

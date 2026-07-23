@@ -279,6 +279,14 @@ public interface ReportBuilderService extends OpenmrsService {
 	void addGenericReportToLibrary(String reportDefinitionUuid, String name, String description, String code,
 	        ReportCategory category, ReportBuilderReport.ReportType reportType);
 	
+	/**
+	 * Clean up broken report library entries where ReportDefinition doesn't exist
+	 * 
+	 * @return Number of entries cleaned up
+	 */
+	@Transactional
+	int cleanupBrokenReportReferences();
+	
 	@Transactional
 	ETLSource saveETLSource(ETLSource etlSource);
 	

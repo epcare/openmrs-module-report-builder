@@ -16,6 +16,8 @@ public class LegacyReportConfig {
 	
 	private String uuid;
 	
+	private String key; // Report key/identifier for frontend compatibility
+	
 	private String name;
 	
 	private String description;
@@ -48,6 +50,9 @@ public class LegacyReportConfig {
 	private String dateCreated;
 	
 	private String dateChanged;
+	
+	// Design configuration (for frontend compatibility)
+	private Map<String, Object> jsonTemplateConfig = new HashMap<String, Object>();
 	
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	public static class Parameter {
@@ -415,6 +420,14 @@ public class LegacyReportConfig {
 		this.uuid = uuid;
 	}
 	
+	public String getKey() {
+		return key;
+	}
+	
+	public void setKey(String key) {
+		this.key = key;
+	}
+	
 	public String getName() {
 		return name;
 	}
@@ -525,5 +538,13 @@ public class LegacyReportConfig {
 	
 	public void setDateChanged(String dateChanged) {
 		this.dateChanged = dateChanged;
+	}
+	
+	public Map<String, Object> getJsonTemplateConfig() {
+		return jsonTemplateConfig;
+	}
+	
+	public void setJsonTemplateConfig(Map<String, Object> jsonTemplateConfig) {
+		this.jsonTemplateConfig = jsonTemplateConfig;
 	}
 }

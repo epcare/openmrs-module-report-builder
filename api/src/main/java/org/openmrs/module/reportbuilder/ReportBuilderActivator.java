@@ -34,6 +34,13 @@ public class ReportBuilderActivator extends BaseModuleActivator {
 			log.error("Failed to ensure Import All Legacy Reports task exists", e);
 		}
 		
+		try {
+			Context.getService(ReportBuilderService.class).ensureImportAllGenericReportsTaskExists();
+		}
+		catch (Exception e) {
+			log.error("Failed to ensure Import All Generic Reports task exists", e);
+		}
+		
 		log.info("Started Report Builder");
 	}
 	

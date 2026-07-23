@@ -138,6 +138,8 @@ public interface ReportBuilderDAO {
 	
 	ReportLibrary getReportLibraryByReportDefinitionUuid(String reportDefinitionUuid);
 	
+	List<ReportLibrary> getReportLibrariesByName(String name);
+	
 	ReportLibrary getReportLibraryByBuilderReportUuid(String builderReportUuid);
 	
 	void purgeReportLibrary(ReportLibrary reportLibrary);

@@ -162,6 +162,8 @@ public class LegacyGenericReportSchema {
 		
 		private String type;
 		
+		private boolean required;
+		
 		public String getName() {
 			return name;
 		}
@@ -184,6 +186,14 @@ public class LegacyGenericReportSchema {
 		
 		public void setType(String type) {
 			this.type = type;
+		}
+		
+		public boolean isRequired() {
+			return required;
+		}
+		
+		public void setRequired(boolean required) {
+			this.required = required;
 		}
 	}
 	

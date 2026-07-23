@@ -68,6 +68,7 @@ import org.openmrs.module.reporting.report.service.ReportService;
 import org.openmrs.util.OpenmrsUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
@@ -1665,7 +1666,9 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	}
 	
 	/**
-	 * Add a generic report to the report library
+	 * Add a generic report to the report library Note: For generic reports, reportDefinitionUuid is
+	 * used only as a reference identifier. The actual report definition is stored as JSON in the
+	 * LegacyReport table, not as a serialized ReportDefinition in the reporting module tables.
 	 */
 	public void addGenericReportToLibrary(String reportDefinitionUuid, String name, String description, String code,
 	        ReportCategory category, ReportBuilderReport.ReportType reportType) {
@@ -1682,25 +1685,115 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 				existingEntry.setReportType(reportType);
 				dao.saveReportLibrary(existingEntry);
 				log.debug("Updated report library entry for generic report: {}", name);
-			} else {
-				// Create new library entry
-				ReportLibrary libraryEntry = new ReportLibrary();
-				libraryEntry.setUuid(UUID.randomUUID().toString());
-				libraryEntry.setName(name);
-				libraryEntry.setDescription(description);
-				libraryEntry.setCode(code);
-				libraryEntry.setSourceType(ReportLibrary.ReportSourceType.LEGACY);
-				libraryEntry.setReportDefinitionUuid(reportDefinitionUuid);
-				libraryEntry.setCategory(category);
-				libraryEntry.setReportType(reportType);
-				libraryEntry.setMigrated(true);
-				dao.saveReportLibrary(libraryEntry);
-				log.debug("Added generic report to library: {}", name);
+				return;
 			}
+			
+			// Check for broken references - entries with the same name but missing ReportDefinition
+			List<ReportLibrary> entriesByName = dao.getReportLibrariesByName(name);
+			if (entriesByName != null && !entriesByName.isEmpty()) {
+				for (ReportLibrary entry : entriesByName) {
+					// Check if this entry has the same UUID
+					if (reportDefinitionUuid.equals(entry.getReportDefinitionUuid())) {
+						// Found an entry with the same UUID - update it
+						log.info("Updating existing report library entry for: {} (UUID: {})", name, reportDefinitionUuid);
+						entry.setName(name);
+						entry.setDescription(description);
+						entry.setCode(code);
+						entry.setCategory(category);
+						entry.setReportType(reportType);
+						entry.setRetired(false); // Unretire if it was retired
+						entry.setMigrated(true);
+						dao.saveReportLibrary(entry);
+						log.info("Updated report library entry: {}", name);
+						return;
+					}
+				}
+			}
+			
+			// Create new library entry
+			ReportLibrary libraryEntry = new ReportLibrary();
+			libraryEntry.setUuid(UUID.randomUUID().toString());
+			libraryEntry.setName(name);
+			libraryEntry.setDescription(description);
+			libraryEntry.setCode(code);
+			libraryEntry.setSourceType(ReportLibrary.ReportSourceType.LEGACY);
+			libraryEntry.setReportDefinitionUuid(reportDefinitionUuid);
+			libraryEntry.setCategory(category);
+			libraryEntry.setReportType(reportType);
+			libraryEntry.setMigrated(true);
+			dao.saveReportLibrary(libraryEntry);
+			log.debug("Added generic report to library: {}", name);
 		}
 		catch (Exception e) {
 			log.error("Failed to add generic report to library: {}", name, e);
 			// Don't throw exception to prevent breaking the import operation
+		}
+	}
+	
+	@Override
+	public int cleanupBrokenReportReferences() {
+		try {
+			// Get all report library entries
+			List<ReportLibrary> allLibraries = dao.getReportLibraries("", false, 0, Integer.MAX_VALUE);
+			int cleanedCount = 0;
+			
+			for (ReportLibrary library : allLibraries) {
+				// For legacy reports (sourceType = LEGACY), check if LegacyReport exists
+				// For builder reports (sourceType = BUILDER), check if ReportDefinition exists
+				if (library.getReportDefinitionUuid() != null && !library.getReportDefinitionUuid().trim().isEmpty()) {
+					if (library.getSourceType() == ReportLibrary.ReportSourceType.LEGACY) {
+						// For legacy reports, check if LegacyReport exists
+						try {
+							LegacyReport legacyReport = dao.getLegacyReportByUuid(library.getReportDefinitionUuid());
+							if (legacyReport == null || legacyReport.isRetired()) {
+								// LegacyReport not found or retired - retire this broken entry
+								log.info(
+								    "Retiring broken legacy report library entry: {} (UUID: {}, missing LegacyReport: {})",
+								    library.getName(), library.getUuid(), library.getReportDefinitionUuid());
+								library.setRetired(true);
+								library.setRetireReason("LegacyReport not found - cleaned up by cleanupBrokenReportReferences");
+								dao.saveReportLibrary(library);
+								cleanedCount++;
+							}
+						}
+						catch (Exception e) {
+							// Error checking LegacyReport - log and continue
+							log.debug("Error checking LegacyReport for library entry {}: {}", library.getName(),
+							    e.getMessage());
+						}
+					} else {
+						// For builder reports, try to check if ReportDefinition exists
+						try {
+							org.openmrs.module.reporting.report.definition.ReportDefinition rd = Context.getService(
+							    org.openmrs.module.reporting.report.definition.service.ReportDefinitionService.class)
+							        .getDefinitionByUuid(library.getReportDefinitionUuid());
+							
+							if (rd == null) {
+								// ReportDefinition not found - retire this broken entry
+								log.info(
+								    "Retiring broken report library entry: {} (UUID: {}, missing ReportDefinition: {})",
+								    library.getName(), library.getUuid(), library.getReportDefinitionUuid());
+								library.setRetired(true);
+								library.setRetireReason("ReportDefinition not found - cleaned up by cleanupBrokenReportReferences");
+								dao.saveReportLibrary(library);
+								cleanedCount++;
+							}
+						}
+						catch (Exception e) {
+							// Error checking ReportDefinition - log and continue
+							log.debug("Error checking ReportDefinition for library entry {}: {}", library.getName(),
+							    e.getMessage());
+						}
+					}
+				}
+			}
+			
+			log.info("Cleaned up {} broken report library entries", cleanedCount);
+			return cleanedCount;
+		}
+		catch (Exception e) {
+			log.error("Failed to cleanup broken report references", e);
+			return 0;
 		}
 	}
 	
@@ -1785,7 +1878,8 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			
 			@Override
 			public boolean accept(File dir, String name) {
-				return name != null && name.toLowerCase().endsWith(".json");
+				// Skip generic reports - they should be imported via GenericReportImporter
+				return name != null && name.toLowerCase().endsWith(".json") && !name.endsWith("-generic.json");
 			}
 		});
 		
@@ -1803,7 +1897,17 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		
 		int i;
 		for (i = 0; i < reportFiles.length; i++) {
-			results.add(doImportLegacyReportPackage(legacyReportsRootDir, reportFiles[i], false));
+			try {
+				results.add(doImportLegacyReportPackage(legacyReportsRootDir, reportFiles[i], false));
+			}
+			catch (Exception e) {
+				// Log error and continue with other files
+				log.error("Failed to import legacy report from file: " + reportFiles[i].getName(), e);
+				ReportImportResult errorResult = new ReportImportResult();
+				errorResult.setReportName(reportFiles[i].getName());
+				errorResult.addMessage("ERROR: " + e.getMessage());
+				results.add(errorResult);
+			}
 		}
 		
 		return results;
@@ -1839,10 +1943,17 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		}
 		
 		ReportImportResult result = new ReportImportResult();
-		
 		ReportConfig reportConfig = loadLegacyReportConfig(reportFile);
-		legacyConfigValidator.validateReportConfig(reportConfig);
-		result.setReportName(reportConfig.getName());
+		
+		try {
+			legacyConfigValidator.validateReportConfig(reportConfig);
+			result.setReportName(reportConfig.getName());
+		}
+		catch (Exception e) {
+			// Add file name to error message for easier debugging
+			throw new IllegalArgumentException("Failed to process legacy report file '" + reportFile.getName() + "': "
+			        + e.getMessage(), e);
+		}
 		
 		List<Parameter> parameters = buildLegacyParameters(legacyRootDir, reportConfig);
 		Map<String, CohortDefinition> builtCohorts = buildLegacyCohorts(legacyRootDir, parameters);
@@ -2238,34 +2349,42 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		return value != null && value.trim().length() > 0;
 	}
 	
+	@Autowired
 	public void setLegacyConfigParser(JsonConfigParser legacyConfigParser) {
 		this.legacyConfigParser = legacyConfigParser;
 	}
 	
+	@Autowired
 	public void setLegacyReferenceResolver(ReferenceResolver legacyReferenceResolver) {
 		this.legacyReferenceResolver = legacyReferenceResolver;
 	}
 	
+	@Autowired
 	public void setLegacyParameterBuilder(ParameterBuilder legacyParameterBuilder) {
 		this.legacyParameterBuilder = legacyParameterBuilder;
 	}
 	
+	@Autowired
 	public void setLegacyCohortDefinitionFactory(CohortDefinitionFactory legacyCohortDefinitionFactory) {
 		this.legacyCohortDefinitionFactory = legacyCohortDefinitionFactory;
 	}
 	
+	@Autowired
 	public void setLegacyDatasetDefinitionFactory(DatasetDefinitionFactory legacyDatasetDefinitionFactory) {
 		this.legacyDatasetDefinitionFactory = legacyDatasetDefinitionFactory;
 	}
 	
+	@Autowired
 	public void setLegacyReportDefinitionFactory(ReportDefinitionFactory legacyReportDefinitionFactory) {
 		this.legacyReportDefinitionFactory = legacyReportDefinitionFactory;
 	}
 	
+	@Autowired
 	public void setLegacyDesignBuilder(DesignBuilder legacyDesignBuilder) {
 		this.legacyDesignBuilder = legacyDesignBuilder;
 	}
 	
+	@Autowired
 	public void setLegacyConfigValidator(ConfigValidator legacyConfigValidator) {
 		this.legacyConfigValidator = legacyConfigValidator;
 	}
@@ -2438,6 +2557,11 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		// Generate UUID if not provided
 		if (config.getUuid() == null || config.getUuid().trim().isEmpty()) {
 			config.setUuid(java.util.UUID.randomUUID().toString());
+		}
+		
+		// Generate key if not provided (for frontend compatibility)
+		if (config.getKey() == null || config.getKey().trim().isEmpty()) {
+			config.setKey(generateKeyFromName(config.getName()));
 		}
 		
 		// Set default values
@@ -2712,6 +2836,10 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 			LegacyReportConfig config = objectMapper.readValue(entity.getConfigJson(), LegacyReportConfig.class);
 			config.setUuid(entity.getUuid());
+			// Ensure key field is populated - generate from name if not present in JSON
+			if (config.getKey() == null || config.getKey().trim().isEmpty()) {
+				config.setKey(generateKeyFromName(entity.getName()));
+			}
 			config.setName(entity.getName());
 			config.setDescription(entity.getDescription());
 			config.setVersion(entity.getVersion());
@@ -2734,6 +2862,17 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		catch (Exception e) {
 			throw new org.openmrs.api.APIException("Failed to convert LegacyReport to LegacyReportConfig", e);
 		}
+	}
+	
+	/**
+	 * Generate a report key from the report name for frontend compatibility
+	 */
+	private String generateKeyFromName(String name) {
+		if (name == null || name.trim().isEmpty()) {
+			return null;
+		}
+		// Convert to lowercase and replace spaces with underscores
+		return name.trim().toLowerCase().replaceAll("\\s+", "_").replaceAll("[^a-z0-9_]", "");
 	}
 	
 	private LegacyReport convertToEntity(LegacyReportConfig config) {

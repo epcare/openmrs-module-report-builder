@@ -124,6 +124,7 @@ public class ReportLibraryResource extends DelegatingCrudResource<ReportLibrary>
 			d.addProperty("reportBuilderReportUuid");
 			d.addProperty("reportType");
 			d.addProperty("migrated");
+			d.addProperty("metaJson");
 			d.addProperty("retired");
 			d.addProperty("category");
 			d.addProperty("auditInfo");
@@ -145,6 +146,7 @@ public class ReportLibraryResource extends DelegatingCrudResource<ReportLibrary>
 		d.addProperty("reportBuilderReportUuid");
 		d.addProperty("reportType");
 		d.addProperty("migrated");
+		d.addProperty("metaJson");
 		d.addProperty("category");
 		return d;
 	}

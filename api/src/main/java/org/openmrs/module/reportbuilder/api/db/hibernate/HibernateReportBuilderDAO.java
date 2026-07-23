@@ -34,6 +34,9 @@ import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.hibernate.criterion.Restrictions.like;
@@ -538,10 +541,14 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 		SQLQuery q = getSession().createSQLQuery(limitedSql);
 		q.setCacheMode(CacheMode.IGNORE);
 		
-		// bind request params
+		// bind request params - only those that actually exist in the SQL query
+		Set<String> sqlParams = extractNamedParameters(limitedSql);
 		Map<String, Object> safeParams = (params != null) ? params : Collections.<String, Object> emptyMap();
 		for (Map.Entry<String, Object> e : safeParams.entrySet()) {
-			q.setParameter(e.getKey(), e.getValue());
+			// Only set parameter if it exists in the SQL query
+			if (sqlParams.contains(e.getKey())) {
+				q.setParameter(e.getKey(), e.getValue());
+			}
 		}
 		q.setParameter("__maxRows", rowsLimit);
 		
@@ -575,6 +582,29 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 	
 	private static final Pattern FORBIDDEN = Pattern.compile(
 	    "\\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE)\\b", Pattern.CASE_INSENSITIVE);
+	
+	/**
+	 * Pattern to match named parameters in SQL queries like :paramName Matches word characters and
+	 * underscores after a colon
+	 */
+	private static final Pattern NAMED_PARAM_PATTERN = Pattern.compile(":([\\w_]+)");
+	
+	/**
+	 * Extracts all named parameter names from a SQL query. For example, from
+	 * "SELECT * FROM table WHERE date BETWEEN :startDate AND :endDate" returns ["startDate",
+	 * "endDate"]
+	 * 
+	 * @param sql the SQL query to parse
+	 * @return set of parameter names found in the query
+	 */
+	private static Set<String> extractNamedParameters(String sql) {
+		Set<String> params = new HashSet<>();
+		Matcher matcher = NAMED_PARAM_PATTERN.matcher(sql);
+		while (matcher.find()) {
+			params.add(matcher.group(1));
+		}
+		return params;
+	}
 	
 	private static String normalizeSql(String sql) {
 		String s = sql.trim();
@@ -817,6 +847,14 @@ public class HibernateReportBuilderDAO implements ReportBuilderDAO {
 		Criteria c = getSession().createCriteria(ReportLibrary.class);
 		c.add(Restrictions.eq("reportDefinitionUuid", reportDefinitionUuid));
 		return (ReportLibrary) c.uniqueResult();
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<ReportLibrary> getReportLibrariesByName(String name) {
+		Criteria c = getSession().createCriteria(ReportLibrary.class);
+		c.add(Restrictions.eq("name", name));
+		c.add(Restrictions.eq("retired", false));
+		return c.list();
 	}
 	
 	public ReportLibrary getReportLibraryByBuilderReportUuid(String builderReportUuid) {

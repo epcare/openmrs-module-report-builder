@@ -40,6 +40,10 @@ public class ReportLibrary extends BaseOpenmrsMetadata implements Serializable {
 	@Column(name = "migrated", nullable = false)
 	private Boolean migrated = Boolean.FALSE;
 	
+	@Lob
+	@Column(name = "meta_json")
+	private String metaJson;
+	
 	@Override
 	public Integer getId() {
 		return id;
@@ -112,6 +116,14 @@ public class ReportLibrary extends BaseOpenmrsMetadata implements Serializable {
 	
 	public void setMigrated(Boolean migrated) {
 		this.migrated = migrated;
+	}
+	
+	public String getMetaJson() {
+		return metaJson;
+	}
+	
+	public void setMetaJson(String metaJson) {
+		this.metaJson = metaJson;
 	}
 	
 	public String getDisplay() {

@@ -51,6 +51,7 @@ public class LegacyReportController extends BaseRestController {
 			for (LegacyReportConfig report : reports) {
 				SimpleObject reportObj = new SimpleObject();
 				reportObj.put("uuid", report.getUuid());
+				reportObj.put("key", report.getKey()); // Add key field for frontend
 				reportObj.put("name", report.getName());
 				reportObj.put("description", report.getDescription());
 				reportObj.put("status", report.getStatus());
@@ -59,6 +60,7 @@ public class LegacyReportController extends BaseRestController {
 				reportObj.put("subcategory", report.getSubcategory());
 				reportObj.put("reportType", report.getReportType());
 				reportObj.put("parameters", report.getParameters());
+				// Map dataSetDefinitions to datasets for frontend compatibility
 				reportObj.put("datasets", report.getDataSetDefinitions());
 				results.add(reportObj);
 			}
@@ -89,8 +91,9 @@ public class LegacyReportController extends BaseRestController {
 				return response;
 			}
 			
-			// Convert the complete report to SimpleObject
+			// Convert the complete report to SimpleObject with frontend-compatible field names
 			response.put("uuid", report.getUuid());
+			response.put("key", report.getKey()); // Add key field for frontend
 			response.put("name", report.getName());
 			response.put("description", report.getDescription());
 			response.put("status", report.getStatus());
@@ -102,7 +105,11 @@ public class LegacyReportController extends BaseRestController {
 			response.put("reportScope", report.getReportScope());
 			response.put("parameters", report.getParameters());
 			response.put("advancedFeatures", report.getAdvancedFeatures());
-			response.put("dataSetDefinitions", report.getDataSetDefinitions());
+			// Map dataSetDefinitions to datasets for frontend compatibility
+			response.put("datasets", report.getDataSetDefinitions());
+			// Map jsonTemplateConfig to designs for frontend compatibility
+			response.put("designs", extractDesignsFromConfig(report.getJsonTemplateConfig()));
+			response.put("jsonTemplateConfig", report.getJsonTemplateConfig());
 			response.put("dateCreated", report.getDateCreated());
 			response.put("dateChanged", report.getDateChanged());
 			
@@ -112,6 +119,22 @@ public class LegacyReportController extends BaseRestController {
 		catch (Exception e) {
 			throw new APIException("Failed to get legacy report: " + uuid, e);
 		}
+	}
+	
+	/**
+	 * Extract designs from jsonTemplateConfig for frontend compatibility
+	 */
+	private List<Map<String, Object>> extractDesignsFromConfig(Map<String, Object> jsonTemplateConfig) {
+		List<Map<String, Object>> designs = new ArrayList<>();
+		if (jsonTemplateConfig != null) {
+			// Create a design object from the template config
+			Map<String, Object> design = new HashMap<>();
+			design.put("type", jsonTemplateConfig.get("type"));
+			design.put("name", jsonTemplateConfig.get("name"));
+			design.put("template", jsonTemplateConfig.get("template"));
+			designs.add(design);
+		}
+		return designs;
 	}
 	
 	/**

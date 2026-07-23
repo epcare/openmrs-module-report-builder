@@ -743,7 +743,23 @@
         </createIndex>
     </changeSet>
 
-    <changeSet id="reportbuilder-20260321-01-create-etl-source" author="slubwama">
+    <!-- Fix for incomplete/failed migration: drop any existing bad constraints and add correct ones -->
+    <changeSet id="reportbuilder-20260722-00-fix-etl-source-fks" author="slubwama">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*)
+                FROM information_schema.key_column_usage
+                WHERE constraint_name = 'fk_report_builder_etl_source_voided_by'
+                AND table_schema = DATABASE()
+                AND table_name = 'report_builder_etl_source'
+            </sqlCheck>
+        </preConditions>
+        <!-- Drop any incorrectly named constraint if it exists -->
+        <dropForeignKeyConstraint baseTableName="report_builder_etl_source"
+                                  constraintName="fk_report_builder_etl_source_voided_by"/>
+    </changeSet>
+
+    <changeSet id="reportbuilder-20260722-01-create-etl-source" author="slubwama">
         <preConditions onFail="MARK_RAN">
             <not>
                 <tableExists tableName="report_builder_etl_source"/>
@@ -813,10 +829,10 @@
 
         <addForeignKeyConstraint
                 baseTableName="report_builder_etl_source"
-                baseColumnNames="voided_by"
+                baseColumnNames="retired_by"
                 referencedTableName="users"
                 referencedColumnNames="user_id"
-                constraintName="fk_report_builder_etl_source_voided_by"/>
+                constraintName="fk_report_builder_etl_source_retired_by"/>
 
         <createIndex tableName="report_builder_etl_source" indexName="idx_report_builder_etl_source_uuid" unique="true">
             <column name="uuid"/>
@@ -834,9 +850,26 @@
             <column name="active"/>
         </createIndex>
 
-        <createIndex tableName="report_builder_etl_source" indexName="idx_report_builder_etl_source_voided">
-            <column name="voided"/>
+        <createIndex tableName="report_builder_etl_source" indexName="idx_report_builder_etl_source_retired">
+            <column name="retired"/>
         </createIndex>
+    </changeSet>
+
+    <!-- Ensure retired_by FK exists for tables created by old changeset -->
+    <changeSet id="reportbuilder-20260722-02-add-missing-retired-by-fk" author="slubwama">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="report_builder_etl_source"/>
+            <not>
+                <foreignKeyConstraintExists foreignKeyName="fk_report_builder_etl_source_retired_by"/>
+            </not>
+        </preConditions>
+
+        <addForeignKeyConstraint
+                baseTableName="report_builder_etl_source"
+                baseColumnNames="retired_by"
+                referencedTableName="users"
+                referencedColumnNames="user_id"
+                constraintName="fk_report_builder_etl_source_retired_by"/>
     </changeSet>
 
     <changeSet id="reportbuilder-20260412-01-import-generic-reports-task" author="slubwama">
@@ -925,6 +958,18 @@
         <createIndex tableName="legacy_report" indexName="idx_legacy_report_retired">
             <column name="retired"/>
         </createIndex>
+    </changeSet>
+
+    <changeSet id="reportbuilder-20260717-01-add-meta-json-to-report-library" author="slubwama">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="report_library"/>
+            <not>
+                <columnExists tableName="report_library" columnName="meta_json"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="report_library">
+            <column name="meta_json" type="LONGTEXT"/>
+        </addColumn>
     </changeSet>
 
 </databaseChangeLog>

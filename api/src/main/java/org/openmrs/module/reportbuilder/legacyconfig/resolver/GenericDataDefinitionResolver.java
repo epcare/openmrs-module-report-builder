@@ -9,7 +9,6 @@
  */
 package org.openmrs.module.reportbuilder.legacyconfig.resolver;
 
-import org.openmrs.PatientIdentifierType;
 import org.openmrs.PersonAttributeType;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.reporting.data.DataDefinition;
@@ -18,6 +17,7 @@ import org.openmrs.module.reporting.data.person.definition.GenderDataDefinition;
 import org.openmrs.module.reporting.data.person.definition.PersonAttributeDataDefinition;
 import org.openmrs.module.reporting.data.person.definition.PreferredAddressDataDefinition;
 import org.openmrs.module.reporting.data.patient.definition.PatientIdentifierDataDefinition;
+import org.openmrs.module.reporting.data.patient.definition.SqlPatientDataDefinition;
 import org.openmrs.module.reportbuilder.contract.LegacyGenericReportSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -211,18 +211,115 @@ public class GenericDataDefinitionResolver {
 	}
 	
 	/**
-	 * Resolve calculation definition Used for calculated fields and transformations
+	 * Resolve calculation definition Used for calculated fields and transformations. Now
+	 * implemented using SQL-based approach for common calculations like AGE and AGE_IN_RANGE.
 	 */
 	private DataDefinition resolveCalculationDefinition(LegacyGenericReportSchema.DataDefinition jsonDef) {
-		// Calculations are typically handled at the dataset level
-		// For data definitions, we'll return a placeholder
-		log.info("Resolved calculation definition (returning null - needs implementation)");
-		return null; // Placeholder - would need proper implementation
+		Map<String, Object> config = jsonDef.getConfig();
+		if (config == null) {
+			log.warn("Calculation definition missing config");
+			return null;
+		}
+		
+		String calculation = (String) config.get("calculation");
+		if (calculation == null) {
+			log.warn("Calculation definition missing calculation type");
+			return null;
+		}
+		
+		try {
+			// Handle AGE calculation
+			if ("AGE".equals(calculation)) {
+				String onDate = (String) config.get("onDate");
+				if (onDate == null) {
+					log.warn("AGE calculation missing onDate parameter");
+					return null;
+				}
+				
+				// Use SQL to calculate age
+				String sql = "SELECT TIMESTAMPDIFF(YEAR, p.birthdate, " + onDate + ") "
+				        + "FROM person p WHERE p.person_id = :patientId";
+				
+				SqlPatientDataDefinition sqlDef = new SqlPatientDataDefinition();
+				sqlDef.setSql(sql);
+				sqlDef.setName("Age Calculation");
+				
+				log.info("Successfully resolved AGE calculation");
+				return sqlDef;
+			}
+			
+			// Handle AGE_IN_RANGE calculation
+			if ("AGE_IN_RANGE".equals(calculation)) {
+				Object minAgeObj = config.get("minAge");
+				Object maxAgeObj = config.get("maxAge");
+				String onDate = (String) config.get("onDate");
+				
+				if (minAgeObj == null || maxAgeObj == null || onDate == null) {
+					log.warn("AGE_IN_RANGE calculation missing required parameters");
+					return null;
+				}
+				
+				int minAge = Integer.parseInt(minAgeObj.toString());
+				int maxAge = Integer.parseInt(maxAgeObj.toString());
+				
+				// Use SQL to check if age is in range
+				String sql = String.format("SELECT CASE WHEN TIMESTAMPDIFF(YEAR, p.birthdate, %s) "
+				        + "BETWEEN %d AND %d THEN 1 ELSE 0 END " + "FROM person p WHERE p.person_id = :patientId", onDate,
+				    minAge, maxAge);
+				
+				SqlPatientDataDefinition sqlDef = new SqlPatientDataDefinition();
+				sqlDef.setSql(sql);
+				sqlDef.setName("Age Range Calculation (" + minAge + "-" + maxAge + ")");
+				
+				log.info("Successfully resolved AGE_IN_RANGE calculation: {}-{}", minAge, maxAge);
+				return sqlDef;
+			}
+			
+			// Handle AGE_IN_RANGE_EXCLUSIVE calculation (returns true if age is in range)
+			if ("AGE_IN_RANGE_EXCLUSIVE".equals(calculation)) {
+				Object minAgeObj = config.get("minAge");
+				Object maxAgeObj = config.get("maxAge");
+				String onDate = (String) config.get("onDate");
+				
+				if (minAgeObj == null || maxAgeObj == null || onDate == null) {
+					log.warn("AGE_IN_RANGE_EXCLUSIVE calculation missing required parameters");
+					return null;
+				}
+				
+				int minAge = Integer.parseInt(minAgeObj.toString());
+				int maxAge = Integer.parseInt(maxAgeObj.toString());
+				
+				// Use SQL to check if age is in range (exclusive)
+				String sql = String.format("SELECT CASE WHEN TIMESTAMPDIFF(YEAR, p.birthdate, %s) "
+				        + "> %d AND TIMESTAMPDIFF(YEAR, p.birthdate, %s) < %d THEN 1 ELSE 0 END "
+				        + "FROM person p WHERE p.person_id = :patientId", onDate, minAge, onDate, maxAge);
+				
+				SqlPatientDataDefinition sqlDef = new SqlPatientDataDefinition();
+				sqlDef.setSql(sql);
+				sqlDef.setName("Age Range Exclusive Calculation (" + minAge + "-" + maxAge + ")");
+				
+				log.info("Successfully resolved AGE_IN_RANGE_EXCLUSIVE calculation: {}-{}", minAge, maxAge);
+				return sqlDef;
+			}
+			
+			// Unsupported calculation type
+			log.warn("Unsupported calculation type: {}. Supported types: AGE, AGE_IN_RANGE, AGE_IN_RANGE_EXCLUSIVE",
+			    calculation);
+			return null;
+		}
+		catch (NumberFormatException e) {
+			log.error("Failed to parse numeric parameters for calculation: " + calculation, e);
+			return null;
+		}
+		catch (Exception e) {
+			log.error("Failed to resolve calculation definition for type: " + calculation, e);
+			return null;
+		}
 	}
 	
 	/**
 	 * Resolve SQL data definition for complex queries This is the key to eliminating custom Java
-	 * classes - use SQL for complex logic
+	 * classes - use SQL for complex logic. Now properly implemented using SqlPatientDataDefinition.
 	 */
 	private DataDefinition resolveSqlDataDefinition(LegacyGenericReportSchema.DataDefinition jsonDef) {
 		Map<String, Object> config = jsonDef.getConfig();
@@ -233,11 +330,26 @@ public class GenericDataDefinitionResolver {
 		
 		String sql = (String) config.get("sql");
 		
-		// Create a SQL-based data definition
-		// Note: This would need to use SqlPatientQuery or similar
-		// For now, this is a placeholder for the SQL-based approach
-		
-		log.info("Resolved SQL data definition (returning null - needs implementation)");
-		return null; // Placeholder - needs SQL implementation
+		try {
+			// Use the standard OpenMRS SqlPatientDataDefinition class
+			SqlPatientDataDefinition sqlDef = new SqlPatientDataDefinition();
+			sqlDef.setSql(sql);
+			
+			// Set a descriptive name based on the SQL query
+			String name = "SQL Data Definition";
+			if (sql.length() > 50) {
+				name = "SQL: " + sql.substring(0, 47) + "...";
+			} else {
+				name = "SQL: " + sql;
+			}
+			sqlDef.setName(name);
+			
+			log.info("Successfully resolved SQL data definition with query length: {}", sql.length());
+			return sqlDef;
+		}
+		catch (Exception e) {
+			log.error("Failed to create SQL data definition: " + e.getMessage(), e);
+			return null;
+		}
 	}
 }

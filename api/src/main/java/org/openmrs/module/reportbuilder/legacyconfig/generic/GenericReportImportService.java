@@ -115,35 +115,61 @@ public class GenericReportImportService {
 			log.debug("Report categorization: " + jsonReport.getCategory() + "/" + jsonReport.getSubcategory() + " ["
 			        + jsonReport.getReportType() + " - " + jsonReport.getReportYear() + "]");
 			
-			// Convert to OpenMRS ReportDefinition
-			ReportDefinition reportDefinition = convertToReportDefinition(jsonReport);
-			
-			// Save to database
-			ReportDefinitionService reportDefService = Context.getService(ReportDefinitionService.class);
+			// DO NOT save ReportDefinition to the database to avoid serialization issues
+			// Instead, save only the JSON configuration to LegacyReport entity
+			// ReportDefinition will be created on-the-fly when needed for report execution
 			
 			// Check if report already exists (by UUID)
-			ReportDefinition existing = reportDefService.getDefinitionByUuid(reportDefinition.getUuid());
+			LegacyReport existing = reportBuilderDAO.getLegacyReportByUuid(jsonReport.getUuid());
 			if (existing != null) {
-				log.info("Updating existing report: " + jsonReport.getName() + " (UUID: " + reportDefinition.getUuid() + ")");
-				updateExistingReport(existing, reportDefinition);
-				ReportDefinition saved = reportDefService.saveDefinition(existing);
+				log.info("Updating existing report: " + jsonReport.getName() + " (UUID: " + jsonReport.getUuid() + ")");
 				
-				// Add to report library
-				addToReportLibrary(saved, jsonReport);
+				// Update existing LegacyReport entity
+				existing.setName(jsonReport.getName());
+				existing.setDescription(jsonReport.getDescription());
+				existing.setVersion(jsonReport.getVersion());
+				existing.setCategory(jsonReport.getCategory());
+				existing.setSubcategory(jsonReport.getSubcategory());
+				existing.setReportType(jsonReport.getReportType());
+				existing.setReportYear(jsonReport.getReportYear());
+				existing.setReportScope(jsonReport.getReportScope());
+				existing.setStatus("ACTIVE");
+				existing.setDateChanged(new Date());
 				
-				// Save to LegacyReport entity
-				saveLegacyReportEntity(jsonReport, saved);
+				// Update the JSON config
+				String configJson = objectMapper.writeValueAsString(jsonReport);
+				existing.setConfigJson(configJson);
+				
+				reportBuilderDAO.saveLegacyReport(existing);
+				
+				// Add to report library (without ReportDefinition UUID)
+				addToReportLibraryFromJson(jsonReport);
 				
 				return new ReportImportResult(jsonFile.getName(), true, "Report updated successfully");
 			} else {
-				log.info("Creating new report: " + jsonReport.getName() + " (UUID: " + reportDefinition.getUuid() + ")");
-				ReportDefinition saved = reportDefService.saveDefinition(reportDefinition);
+				log.info("Creating new report: " + jsonReport.getName() + " (UUID: " + jsonReport.getUuid() + ")");
 				
-				// Add to report library
-				addToReportLibrary(saved, jsonReport);
+				// Create new LegacyReport entity
+				LegacyReport legacyReport = new LegacyReport();
+				legacyReport.setUuid(jsonReport.getUuid());
+				legacyReport.setName(jsonReport.getName());
+				legacyReport.setDescription(jsonReport.getDescription());
+				legacyReport.setVersion(jsonReport.getVersion());
+				legacyReport.setCategory(jsonReport.getCategory());
+				legacyReport.setSubcategory(jsonReport.getSubcategory());
+				legacyReport.setReportType(jsonReport.getReportType());
+				legacyReport.setReportYear(jsonReport.getReportYear());
+				legacyReport.setReportScope(jsonReport.getReportScope());
+				legacyReport.setStatus("ACTIVE");
 				
-				// Save to LegacyReport entity
-				saveLegacyReportEntity(jsonReport, saved);
+				// Store the JSON configuration
+				String configJson = objectMapper.writeValueAsString(jsonReport);
+				legacyReport.setConfigJson(configJson);
+				
+				reportBuilderDAO.saveLegacyReport(legacyReport);
+				
+				// Add to report library (without ReportDefinition UUID)
+				addToReportLibraryFromJson(jsonReport);
 				
 				return new ReportImportResult(jsonFile.getName(), true, "Report created successfully");
 			}
@@ -248,6 +274,7 @@ public class GenericReportImportService {
 					Class<?> paramClass = convertParameterType(param.getType());
 					org.openmrs.module.reporting.evaluation.parameter.Parameter reportParam = new org.openmrs.module.reporting.evaluation.parameter.Parameter(
 					        param.getName(), param.getLabel(), paramClass);
+					reportParam.setRequired(param.isRequired());
 					reportDefinition.addParameter(reportParam);
 				}
 				catch (ClassNotFoundException e) {
@@ -256,6 +283,7 @@ public class GenericReportImportService {
 					// Use String as fallback
 					org.openmrs.module.reporting.evaluation.parameter.Parameter reportParam = new org.openmrs.module.reporting.evaluation.parameter.Parameter(
 					        param.getName(), param.getLabel(), String.class);
+					reportParam.setRequired(param.isRequired());
 					reportDefinition.addParameter(reportParam);
 				}
 			}
@@ -268,6 +296,27 @@ public class GenericReportImportService {
 					DataSetDefinition dataSet = convertDataSetDefinition(jsonDataSet, jsonReport);
 					if (dataSet != null) {
 						reportDefinition.addDataSetDefinition(dataSet.getName(), dataSet, null);
+						
+						// Set base cohort definition on report if dataset has a row filter
+						// This follows the pattern from legacy UgandaEMR reports where the same cohort
+						// is used both as a row filter on the dataset and as base cohort on the report
+						if (jsonDataSet.getRowFilter() != null) {
+							try {
+								org.openmrs.module.reportbuilder.legacyconfig.resolver.GenericRowFilterResolver rowFilterResolver = new org.openmrs.module.reportbuilder.legacyconfig.resolver.GenericRowFilterResolver();
+								org.openmrs.module.reporting.cohort.definition.CohortDefinition baseCohort = rowFilterResolver
+								        .resolveRowFilter(jsonDataSet.getRowFilter());
+								if (baseCohort != null) {
+									reportDefinition
+									        .setBaseCohortDefinition(org.openmrs.module.reporting.evaluation.parameter.Mapped
+									                .mapStraightThrough(baseCohort));
+									log.info("Set base cohort definition on report: " + jsonReport.getName());
+									break; // Use first dataset's row filter as report base cohort
+								}
+							}
+							catch (Exception e) {
+								log.error("Failed to resolve base cohort for report: " + jsonReport.getName(), e);
+							}
+						}
 					}
 				}
 				catch (Exception e) {
@@ -332,7 +381,15 @@ public class GenericReportImportService {
 			if (jsonDataSet.getRowFilter() != null) {
 				log.debug("Processing row filter: " + jsonDataSet.getRowFilter().getType());
 				// Row filters would be handled via cohort definitions
-				// For now, we'll skip complex row filter handling
+				// Resolve row filter using GenericRowFilterResolver
+				org.openmrs.module.reportbuilder.legacyconfig.resolver.GenericRowFilterResolver rowFilterResolver = new org.openmrs.module.reportbuilder.legacyconfig.resolver.GenericRowFilterResolver();
+				org.openmrs.module.reporting.cohort.definition.CohortDefinition rowFilter = rowFilterResolver
+				        .resolveRowFilter(jsonDataSet.getRowFilter());
+				if (rowFilter != null) {
+					patientDataSet.addRowFilter(org.openmrs.module.reporting.evaluation.parameter.Mapped
+					        .mapStraightThrough(rowFilter));
+					log.info("Added row filter to PATIENT_DATA_SET: " + jsonDataSet.getName());
+				}
 			}
 			
 			// Process columns if available in the dataset definition
@@ -405,6 +462,7 @@ public class GenericReportImportService {
 						Class<?> paramClass = convertParameterType(param.getType());
 						org.openmrs.module.reporting.evaluation.parameter.Parameter reportParam = new org.openmrs.module.reporting.evaluation.parameter.Parameter(
 						        param.getName(), param.getLabel(), paramClass);
+						reportParam.setRequired(param.isRequired());
 						sqlDataSet.addParameter(reportParam);
 					}
 					catch (ClassNotFoundException e) {
@@ -596,6 +654,49 @@ public class GenericReportImportService {
 		}
 		catch (Exception e) {
 			log.error("Failed to add generic report to library: {}", reportDefinition.getName(), e);
+			// Don't throw exception to prevent breaking the import operation
+		}
+	}
+	
+	/**
+	 * Add imported generic report to the report library without ReportDefinition This version uses
+	 * only the JSON configuration and does not require a ReportDefinition UUID
+	 */
+	private void addToReportLibraryFromJson(LegacyGenericReportSchema.ReportDefinition jsonReport) {
+		try {
+			ReportBuilderService reportBuilderService = Context.getService(ReportBuilderService.class);
+			
+			// Extract report information
+			String name = jsonReport.getName();
+			String description = jsonReport.getDescription();
+			String code = jsonReport.getUuid(); // Use UUID as code for generic reports
+			String reportDefinitionUuid = jsonReport.getUuid(); // Use the same UUID for tracking
+			
+			// Determine report type
+			ReportBuilderReport.ReportType reportType = ReportBuilderReport.ReportType.AGGREGATE;
+			if (jsonReport.getReportType() != null) {
+				try {
+					reportType = ReportBuilderReport.ReportType.fromString(jsonReport.getReportType());
+				}
+				catch (Exception e) {
+					log.debug("Could not parse report type: {}", jsonReport.getReportType());
+				}
+			}
+			
+			// Find or create category
+			ReportCategory category = null;
+			if (jsonReport.getCategory() != null) {
+				category = findOrCreateCategory(jsonReport.getCategory(), jsonReport.getSubcategory());
+			}
+			
+			// Add to library using the service method (with ReportDefinition UUID as reference only)
+			reportBuilderService.addGenericReportToLibrary(reportDefinitionUuid, name, description, code, category,
+			    reportType);
+			
+			log.info("Added generic report to library from JSON: {}", name);
+		}
+		catch (Exception e) {
+			log.error("Failed to add generic report to library from JSON: {}", jsonReport.getName(), e);
 			// Don't throw exception to prevent breaking the import operation
 		}
 	}

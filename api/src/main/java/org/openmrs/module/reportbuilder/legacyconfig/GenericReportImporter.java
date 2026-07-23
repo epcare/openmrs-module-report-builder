@@ -113,6 +113,26 @@ public class GenericReportImporter {
 			for (LegacyGenericReportSchema.DataSetDefinition jsonDataSet : jsonReport.getDataSetDefinitions()) {
 				DataSetDefinition dataSetDefinition = convertDataSetDefinition(jsonDataSet, jsonReport.getReportType());
 				reportDefinition.addDataSetDefinition(dataSetDefinition.getName(), dataSetDefinition, null);
+				
+				// Set base cohort definition on report if dataset has a row filter
+				// This follows the pattern from legacy UgandaEMR reports where the same cohort
+				// is used both as a row filter on the dataset and as base cohort on the report
+				if (jsonDataSet.getRowFilter() != null) {
+					try {
+						org.openmrs.module.reporting.cohort.definition.CohortDefinition baseCohort = rowFilterResolver
+						        .resolveRowFilter(jsonDataSet.getRowFilter());
+						if (baseCohort != null) {
+							reportDefinition
+							        .setBaseCohortDefinition(org.openmrs.module.reporting.evaluation.parameter.Mapped
+							                .mapStraightThrough(baseCohort));
+							log.info("Set base cohort definition on report: " + jsonReport.getName());
+							break; // Use first dataset's row filter as report base cohort
+						}
+					}
+					catch (Exception e) {
+						log.error("Failed to resolve base cohort for report: " + jsonReport.getName(), e);
+					}
+				}
 			}
 		}
 		
@@ -135,6 +155,7 @@ public class GenericReportImporter {
 				Class<?> paramClass = convertParameterType(param.getType());
 				org.openmrs.module.reporting.evaluation.parameter.Parameter p = new org.openmrs.module.reporting.evaluation.parameter.Parameter(
 				        param.getName(), param.getLabel(), paramClass);
+				p.setRequired(param.isRequired());
 				result.add(p);
 			}
 			catch (Exception e) {
@@ -185,6 +206,7 @@ public class GenericReportImporter {
 				        .resolveRowFilter(jsonDataSet.getRowFilter());
 				if (rowFilter != null) {
 					dataSetDefinition.addRowFilter(Mapped.mapStraightThrough(rowFilter));
+					log.info("Set row filter for dataset: " + jsonDataSet.getName());
 				}
 			}
 			catch (Exception e) {
@@ -197,6 +219,15 @@ public class GenericReportImporter {
 			for (LegacyGenericReportSchema.Column column : jsonDataSet.getColumns()) {
 				try {
 					DataDefinition dataDefinition = dataDefinitionResolver.resolveDataDefinition(column.getDataDefinition());
+					
+					// Add null safety check - skip columns with null data definitions
+					if (dataDefinition == null) {
+						log.error("Skipping column '{}' due to null data definition - type '{}' not supported", column
+						        .getName(), column.getDataDefinition() != null ? column.getDataDefinition().getType()
+						        : "unknown");
+						continue;
+					}
+					
 					DataConverter converter = null;
 					if (column.getConverter() != null) {
 						converter = converterResolver.resolveConverter(column.getConverter());
