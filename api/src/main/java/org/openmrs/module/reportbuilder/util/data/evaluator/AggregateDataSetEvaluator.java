@@ -87,7 +87,13 @@ public class AggregateDataSetEvaluator implements DataSetEvaluator {
 			throw new RuntimeException("Unsupported report design format: " + file.getAbsolutePath());
 		}
 		catch (Exception e) {
-			throw new RuntimeException("Failed to evaluate report design: " + file.getAbsolutePath(), e);
+			// Include the root cause for better debugging
+			Throwable rootCause = e;
+			while (rootCause.getCause() != null) {
+				rootCause = rootCause.getCause();
+			}
+			throw new RuntimeException("Failed to evaluate report design: " + file.getAbsolutePath() + ". Root cause: "
+			        + rootCause.getMessage(), e);
 		}
 	}
 	
@@ -98,19 +104,58 @@ public class AggregateDataSetEvaluator implements DataSetEvaluator {
 		
 		for (JsonNode reportField : reportFieldsArray) {
 			String sqlQuery = cleanupSql(reportField.path("sqlQuery").asText());
+			
+			// Skip indicators with placeholder SQL
+			if (sqlQuery == null || sqlQuery.trim().isEmpty() || sqlQuery.contains("PLACEHOLDER")) {
+				// Add zeros for all value placeholders
+				if (reportField.has("values")) {
+					JsonNode valuesArray = reportField.path("values");
+					PatientDataHelper pdh = new PatientDataHelper();
+					for (JsonNode valueObject : valuesArray) {
+						String valuePlaceHolder = valueObject.path("value_place_holder").asText();
+						pdh.addCol(row, valuePlaceHolder, 0);
+					}
+				} else if (reportField.has("value_place_holder")) {
+					String valuePlaceHolder = reportField.path("value_place_holder").asText();
+					PatientDataHelper pdh = new PatientDataHelper();
+					pdh.addCol(row, valuePlaceHolder, 0);
+				}
+				continue;
+			}
+			
 			String query = applyDatePlaceholders(sqlQuery, startDate, endDate);
 			
-			List<Object[]> results = getEtl(query, evaluationContext);
-			
-			if (reportField.has("values")) {
-				List<ValueHolder> convertedResults = convertToValueHolderList(results);
-				row = placesValuesToDataSetRow(reportField, convertedResults, row);
-			} else if (reportField.has("value_place_holder")) {
-				ValueHolder convertedResult = null;
-				if (results != null && !results.isEmpty()) {
-					convertedResult = convertSingleResultToValueHolder(results.get(0));
+			try {
+				List<Object[]> results = getEtl(query, evaluationContext);
+				
+				if (reportField.has("values")) {
+					List<ValueHolder> convertedResults = convertToValueHolderList(results);
+					row = placesValuesToDataSetRow(reportField, convertedResults, row);
+				} else if (reportField.has("value_place_holder")) {
+					ValueHolder convertedResult = null;
+					if (results != null && !results.isEmpty()) {
+						convertedResult = convertSingleResultToValueHolder(results.get(0));
+					}
+					row = placesValueToDataSetRow(reportField, convertedResult, row);
 				}
-				row = placesValueToDataSetRow(reportField, convertedResult, row);
+			}
+			catch (Exception e) {
+				// Log and continue with zeros for this indicator
+				System.err.println("Error evaluating indicator " + reportField.path("indicator_name").asText() + ": "
+				        + e.getMessage());
+				// Add zeros for all value placeholders
+				if (reportField.has("values")) {
+					JsonNode valuesArray = reportField.path("values");
+					PatientDataHelper pdh = new PatientDataHelper();
+					for (JsonNode valueObject : valuesArray) {
+						String valuePlaceHolder = valueObject.path("value_place_holder").asText();
+						pdh.addCol(row, valuePlaceHolder, 0);
+					}
+				} else if (reportField.has("value_place_holder")) {
+					String valuePlaceHolder = reportField.path("value_place_holder").asText();
+					PatientDataHelper pdh = new PatientDataHelper();
+					pdh.addCol(row, valuePlaceHolder, 0);
+				}
 			}
 		}
 		

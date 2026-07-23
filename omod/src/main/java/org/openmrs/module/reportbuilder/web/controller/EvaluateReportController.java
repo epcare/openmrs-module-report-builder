@@ -53,7 +53,9 @@ public class EvaluateReportController {
 	
 	@RequestMapping(method = RequestMethod.GET)
 	@ResponseBody
-	public Object getReportData(HttpServletRequest request, @RequestParam(value = "uuid") String reportDefinitionUuid,
+	public Object getReportData(HttpServletRequest request,
+	        @RequestParam(required = false, value = "uuid") String directUuid,
+	        @RequestParam(required = false, value = "reportLibraryUuid") String reportLibraryUuid,
 	        @RequestParam(required = false, value = "renderType") String renderType) {
 		try {
 			String normalizedRenderType = normalizeRenderType(renderType);
@@ -65,12 +67,37 @@ public class EvaluateReportController {
 				return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON).body(message);
 			}
 			
+			// Get services
 			ReportDefinitionService reportDefinitionService = Context.getService(ReportDefinitionService.class);
+			ReportBuilderService reportBuilderService = Context.getService(ReportBuilderService.class);
+			
+			// Resolve the actual report definition UUID
+			String reportDefinitionUuid = directUuid;
+			if (reportLibraryUuid != null && !reportLibraryUuid.trim().isEmpty()) {
+				// Resolve from ReportLibrary
+				org.openmrs.module.reportbuilder.model.ReportLibrary libraryEntry = reportBuilderService
+				        .getReportLibraryByUuid(reportLibraryUuid);
+				if (libraryEntry == null) {
+					return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
+					        .body("{\"error\":\"ReportLibrary entry not found with UUID: " + reportLibraryUuid + "\"}");
+				}
+				reportDefinitionUuid = libraryEntry.getReportDefinitionUuid();
+				if (reportDefinitionUuid == null || reportDefinitionUuid.trim().isEmpty()) {
+					return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+					        .body("{\"error\":\"ReportLibrary entry has no associated ReportDefinition UUID\"}");
+				}
+			}
+			
+			if (reportDefinitionUuid == null || reportDefinitionUuid.trim().isEmpty()) {
+				return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+				        .body("{\"error\":\"Either 'uuid' or 'reportLibraryUuid' parameter is required\"}");
+			}
+			
 			ReportDefinition reportDefinition = reportDefinitionService.getDefinitionByUuid(reportDefinitionUuid);
 			
 			if (reportDefinition == null) {
 				return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
-				        .body("{\"error\":\"ReportDefinition not found\"}");
+				        .body("{\"error\":\"ReportDefinition not found with UUID: " + reportDefinitionUuid + "\"}");
 			}
 			
 			EvaluationContext evaluationContext = new EvaluationContext();
@@ -86,8 +113,6 @@ public class EvaluateReportController {
 				
 				return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(out);
 			}
-			
-			ReportBuilderService reportBuilderService = Context.getService(ReportBuilderService.class);
 			
 			if ("json".equals(normalizedRenderType) || "html".equals(normalizedRenderType)) {
 				ReportDesign jsonDesign = findReportDesign(reportDefinition, "JSON");
