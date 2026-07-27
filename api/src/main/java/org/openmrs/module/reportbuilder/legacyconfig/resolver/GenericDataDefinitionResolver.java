@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.reportbuilder.legacyconfig.resolver;
 
+import org.openmrs.PatientIdentifierType;
 import org.openmrs.PersonAttributeType;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.reporting.data.DataDefinition;
@@ -16,6 +17,7 @@ import org.openmrs.module.reporting.data.person.definition.BirthdateDataDefiniti
 import org.openmrs.module.reporting.data.person.definition.GenderDataDefinition;
 import org.openmrs.module.reporting.data.person.definition.PersonAttributeDataDefinition;
 import org.openmrs.module.reporting.data.person.definition.PreferredAddressDataDefinition;
+import org.openmrs.module.reporting.data.person.definition.PreferredNameDataDefinition;
 import org.openmrs.module.reporting.data.patient.definition.PatientIdentifierDataDefinition;
 import org.openmrs.module.reporting.data.patient.definition.SqlPatientDataDefinition;
 import org.openmrs.module.reportbuilder.contract.LegacyGenericReportSchema;
@@ -141,8 +143,17 @@ public class GenericDataDefinitionResolver {
 		
 		try {
 			PatientIdentifierDataDefinition def = new PatientIdentifierDataDefinition();
-			// Note: Configure identifier type using appropriate API method
-			// For now, using basic configuration
+			
+			PatientIdentifierType identifierType = Context.getPatientService().getPatientIdentifierTypeByUuid(
+			    identifierTypeUuid);
+			if (identifierType != null) {
+				def.addType(identifierType);
+			} else {
+				log.warn("Identifier type not found for uuid: {}", identifierTypeUuid);
+			}
+			// Return a single identifier (preferred-first) rather than a list, so the evaluator can
+			// unwrap it directly to the identifier string.
+			def.setIncludeFirstNonNullOnly(Boolean.TRUE);
 			
 			log.info("Resolved identifier definition: " + identifierTypeUuid);
 			return def;
@@ -204,10 +215,10 @@ public class GenericDataDefinitionResolver {
 	 * Resolve person name definition Supports: FULL_NAME, GIVEN_NAME, MIDDLE_NAME, FAMILY_NAME
 	 */
 	private DataDefinition resolvePersonNameDefinition(LegacyGenericReportSchema.DataDefinition jsonDef) {
-		// Person name data definitions are handled by the reporting module
-		// For now, we'll return a placeholder
-		log.info("Resolved person name definition (returning null - needs implementation)");
-		return null; // Placeholder - would need proper implementation
+		// PreferredNameDataDefinition evaluates to the patient's preferred PersonName; the line-list
+		// evaluator unwraps it to a full-name string.
+		log.info("Resolved person name definition via PreferredNameDataDefinition");
+		return new PreferredNameDataDefinition();
 	}
 	
 	/**

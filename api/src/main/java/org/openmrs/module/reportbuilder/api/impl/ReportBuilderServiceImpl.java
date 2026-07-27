@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.impl.BaseOpenmrsService;
+import org.openmrs.Location;
 import org.openmrs.module.reportbuilder.api.ReportBuilderService;
 import org.openmrs.module.reportbuilder.api.db.ReportBuilderDAO;
 import org.openmrs.module.reportbuilder.dto.SqlPreviewResult;
@@ -41,9 +42,11 @@ import org.openmrs.module.reportbuilder.legacyconfig.validator.ConfigValidator;
 import org.openmrs.module.reportbuilder.model.*;
 import org.openmrs.module.reportbuilder.util.IndicatorSqlSync;
 import org.openmrs.module.reportbuilder.util.IndicatorValidator;
+import org.openmrs.module.reportbuilder.util.LinelistConfigCompiler;
 import org.openmrs.module.reportbuilder.util.ReportDesignFileUtil;
 import org.openmrs.module.reportbuilder.util.ReportDesignHtmlRenderer;
 import org.openmrs.module.reportbuilder.util.data.definition.AggregateReportDataSetDefinition;
+import org.openmrs.module.reportbuilder.util.data.definition.LineListDataSetDefinition;
 import org.openmrs.module.reportbuilder.validation.ReportValidationResult;
 import org.openmrs.module.reporting.common.DateUtil;
 import org.openmrs.module.reporting.common.MessageUtil;
@@ -720,6 +723,13 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		try {
 			JsonNode reportConfig = parseJson(report.getConfigJson(), "Invalid ReportBuilderReport configJson");
 			
+			// Linelist (patient-level) reports have a different configJson shape and use a
+			// LineListDataSetDefinition; compile them on a dedicated path and leave the aggregate
+			// logic below untouched.
+			if (isLinelistReport(report, reportConfig)) {
+				return compileLinelistReport(report, reportConfig, reportDefinitionService);
+			}
+			
 			JsonNode definitionNode = reportConfig.path("definition");
 			JsonNode designNode = reportConfig.path("design");
 			
@@ -882,6 +892,166 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			saveReportBuilderReport(report);
 			throw e;
 		}
+	}
+	
+	/**
+	 * Detects whether a report config is a linelist (patient-level) report rather than an
+	 * aggregate/indicator report.
+	 */
+	private boolean isLinelistReport(ReportBuilderReport report, JsonNode config) {
+		if (report.getReportType() == ReportBuilderReport.ReportType.LINE_LIST) {
+			return true;
+		}
+		String reportType = config.path("reportType").asText("");
+		String type = config.path("type").asText("");
+		if ("LINELIST".equalsIgnoreCase(reportType) || "LINE_LIST".equalsIgnoreCase(type)) {
+			return true;
+		}
+		return config.has("baseCohortDefinition") && config.has("dataSetDefinitions") && !config.has("sections")
+		        && !config.has("definition");
+	}
+	
+	/**
+	 * Compiles a linelist (patient-level) report. The saved configJson is the v2 builder format
+	 * carrying build-only detail that the runtime evaluator does not understand.
+	 * {@link LinelistConfigCompiler} converts it into a clean LegacyGenericReportSchema design file
+	 * (stripping all build-only keys), which is then wrapped in a LineListDataSetDefinition so the
+	 * LineListDataSetEvaluator can read it at runtime.
+	 */
+	private CompiledReportArtifacts compileLinelistReport(ReportBuilderReport report, JsonNode reportConfig,
+	        ReportDefinitionService reportDefinitionService) {
+		
+		ObjectNode compiledConfig;
+		String compiledJson;
+		try {
+			compiledConfig = LinelistConfigCompiler.compile(reportConfig, report.getName(), report.getDescription());
+			compiledJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(compiledConfig);
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Failed to compile linelist report config", e);
+		}
+		
+		String definitionFileName = buildLinelistDefinitionFileName(report);
+		File definitionFile;
+		try {
+			definitionFile = ReportDesignFileUtil.writeJsonStringToDesignFile(definitionFileName, compiledJson);
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Failed to write linelist report design file", e);
+		}
+		
+		ReportDefinition reportDefinition = findOrCreateReportDefinition(report, reportDefinitionService);
+		
+		LineListDataSetDefinition dsd = new LineListDataSetDefinition();
+		dsd.setName(report.getName() + " Data Set");
+		dsd.setDescription(report.getDescription());
+		dsd.setReportDesign(definitionFile);
+		
+		reportDefinition.setName(report.getName());
+		reportDefinition.setDescription(report.getDescription());
+		reportDefinition.getParameters().clear();
+		reportDefinition.getDataSetDefinitions().clear();
+		
+		// Declare parameters from the compiled config (type-mapped), guaranteeing startDate/endDate
+		// since the evaluator's date-placeholder substitution relies on them.
+		List<Parameter> declaredParameters = new ArrayList<Parameter>();
+		JsonNode parameters = compiledConfig.path("parameters");
+		if (parameters.isArray() && parameters.size() > 0) {
+			Iterator<JsonNode> it = parameters.elements();
+			while (it.hasNext()) {
+				JsonNode param = it.next();
+				String paramName = param.path("name").asText("");
+				if (paramName.trim().isEmpty()) {
+					continue;
+				}
+				declareLinelistParameter(declaredParameters, reportDefinition, paramName,
+				    param.path("label").asText(paramName), mapParameterTypeToClass(param.path("type").asText("DATE")));
+			}
+		}
+		declareLinelistParameter(declaredParameters, reportDefinition, "startDate", "Start Date", Date.class);
+		declareLinelistParameter(declaredParameters, reportDefinition, "endDate", "End Date", Date.class);
+		
+		for (Parameter p : declaredParameters) {
+			dsd.addParameter(p);
+		}
+		
+		Map<String, Object> parameterMappings = new HashMap<String, Object>();
+		for (Parameter p : declaredParameters) {
+			parameterMappings.put(p.getName(), "${" + p.getName() + "}");
+		}
+		
+		reportDefinition.addDataSetDefinition("linelistDataSet", dsd, parameterMappings);
+		reportDefinition = reportDefinitionService.saveDefinition(reportDefinition);
+		
+		ReportDesign jsonDesign = saveOrUpdateJsonReportDesign(reportDefinition, compiledJson, report);
+		
+		report.setCompiledReportDefinitionUuid(reportDefinition.getUuid());
+		report.setCompiledReportDesignUuid(jsonDesign != null ? jsonDesign.getUuid() : null);
+		report.setLastCompiledAt(new Date());
+		report.setCompileStatus(ReportBuilderReport.ReportCompileStatus.COMPILED);
+		report = saveReportBuilderReport(report);
+		
+		CompiledReportArtifacts out = new CompiledReportArtifacts();
+		out.setReportBuilderReport(report);
+		out.setReportDefinition(reportDefinition);
+		out.setReportDesignFile(definitionFile);
+		out.setCompiledJson(compiledJson);
+		return out;
+	}
+	
+	/**
+	 * Declares a parameter on the report definition unless one with the same name is already
+	 * present, tracking declared parameters so data-set parameters and mappings can be derived from
+	 * them.
+	 */
+	private void declareLinelistParameter(List<Parameter> declared, ReportDefinition reportDefinition, String name,
+	        String label, Class<?> clazz) {
+		for (Parameter existing : declared) {
+			if (name.equalsIgnoreCase(existing.getName())) {
+				return;
+			}
+		}
+		Parameter p = new Parameter(name, label, clazz);
+		reportDefinition.addParameter(p);
+		declared.add(p);
+	}
+	
+	/**
+	 * Maps a frontend parameter type string to the OpenMRS Parameter class.
+	 */
+	private Class<?> mapParameterTypeToClass(String type) {
+		if (type == null) {
+			return Date.class;
+		}
+		switch (type.toUpperCase()) {
+			case "DATE":
+			case "DATETIME":
+				return Date.class;
+			case "LOCATION":
+				return Location.class;
+			case "NUMBER":
+				return Double.class;
+			case "BOOLEAN":
+				return Boolean.class;
+			default:
+				return String.class;
+		}
+	}
+	
+	/**
+	 * Builds a file name for a linelist report design file. Stored under report_designs/linelist/
+	 * to avoid clashing with aggregate designs in the same directory.
+	 */
+	private String buildLinelistDefinitionFileName(ReportBuilderReport report) {
+		String base = report.getCode();
+		if (base == null || base.trim().isEmpty()) {
+			base = report.getUuid();
+		}
+		base = sanitize(base);
+		if (base == null || base.trim().isEmpty()) {
+			base = "report_" + System.currentTimeMillis();
+		}
+		return "linelist/" + base + ".json";
 	}
 	
 	private ArrayNode compileAuthoredDesignGroups(JsonNode authoredGroups, JsonNode sections) {

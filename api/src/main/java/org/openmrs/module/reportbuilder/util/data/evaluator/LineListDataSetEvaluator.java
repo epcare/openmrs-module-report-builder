@@ -1,17 +1,27 @@
 package org.openmrs.module.reportbuilder.util.data.evaluator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.openmrs.Cohort;
+import org.openmrs.PatientIdentifier;
+import org.openmrs.PersonAddress;
+import org.openmrs.PersonAttribute;
+import org.openmrs.PersonName;
 import org.openmrs.annotation.Handler;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.reporting.common.DateUtil;
 import org.openmrs.module.reporting.data.DataDefinition;
 import org.openmrs.module.reporting.data.converter.DataConverter;
+import org.openmrs.module.reporting.data.converter.PropertyConverter;
+import org.openmrs.module.reporting.data.patient.definition.PatientDataDefinition;
+import org.openmrs.module.reporting.data.patient.service.PatientDataService;
+import org.openmrs.module.reporting.data.person.definition.PersonDataDefinition;
+import org.openmrs.module.reporting.data.person.service.PersonDataService;
 import org.openmrs.module.reporting.dataset.DataSetRow;
 import org.openmrs.module.reporting.dataset.SimpleDataSet;
 import org.openmrs.module.reporting.dataset.definition.DataSetDefinition;
 import org.openmrs.module.reporting.dataset.definition.evaluator.DataSetEvaluator;
 import org.openmrs.module.reporting.evaluation.EvaluationContext;
 import org.openmrs.module.reporting.evaluation.EvaluationException;
-import org.openmrs.module.reporting.evaluation.parameter.Parameter;
 import org.openmrs.module.reporting.evaluation.querybuilder.SqlQueryBuilder;
 import org.openmrs.module.reporting.evaluation.service.EvaluationService;
 import org.openmrs.module.reportbuilder.contract.LegacyGenericReportSchema;
@@ -27,9 +37,17 @@ import java.io.File;
 import java.util.*;
 
 /**
- * Evaluator for ETL-based line listing reports. Reads a JSON configuration file and builds a
- * patient dataset by: 1. Parsing the baseCohortDefinition SQL to get patient IDs 2. Creating
- * columns from the dataSetDefinitions 3. Evaluating each column for each patient
+ * Evaluator for ETL-based line listing reports. Reads a JSON configuration file
+ * (LegacyGenericReportSchema format) and builds a patient dataset by:
+ * <ol>
+ * <li>Parsing the baseCohortDefinition SQL to get patient IDs</li>
+ * <li>Creating columns from the dataSetDefinitions</li>
+ * <li>Evaluating each column for each patient</li>
+ * </ol>
+ * SQL and CALCULATION columns are evaluated per-patient via direct SQL execution. Typed OpenMRS
+ * data definitions (PERSON_NAME, PERSON_ATTRIBUTE, PERSON_ADDRESS, IDENTIFIER, GENDER, BIRTHDATE)
+ * are evaluated once over the whole patient cohort via the reporting module's PatientDataService /
+ * PersonDataService and looked up per row.
  */
 @Handler(supports = { LineListDataSetDefinition.class })
 public class LineListDataSetEvaluator implements DataSetEvaluator {
@@ -79,8 +97,15 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 				throw new RuntimeException("No PATIENT_DATA_SET found in report configuration");
 			}
 			
+			// Scope all per-cohort data evaluation to this report's patient set.
+			evaluationContext.setBaseCohort(new Cohort(patientIds));
+			
 			// Build column definitions
 			Map<String, ColumnDefinition> columns = buildColumnDefinitions(patientDataSet);
+			
+			// Pre-evaluate typed data definitions once over the whole cohort (one service call each).
+			// SQL / CALCULATION columns are intentionally excluded here; they run per-patient below.
+			Map<String, Map<Integer, Object>> columnValueMaps = preEvaluateColumns(columns, evaluationContext);
 			
 			PatientDataHelper pdh = new PatientDataHelper();
 			
@@ -93,7 +118,8 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 					ColumnDefinition colDef = entry.getValue();
 					
 					try {
-						Object value = evaluateColumnForPatient(colDef, patientId, evaluationContext);
+						Object value = resolveColumnValue(colDef, patientId, evaluationContext,
+						    columnValueMaps.get(columnKey));
 						pdh.addCol(row, columnKey, value);
 					}
 					catch (Exception e) {
@@ -115,40 +141,165 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 	}
 	
 	/**
+	 * Resolves a single column's value for a patient. SQL / CALCULATION columns execute per-patient
+	 * SQL; typed columns look up their pre-evaluated cohort value and unwrap it to a display value.
+	 */
+	private Object resolveColumnValue(ColumnDefinition colDef, Integer patientId, EvaluationContext context,
+	        Map<Integer, Object> typedValues) {
+		DataDefinition dataDef = colDef.getDataDefinition();
+		if (isSqlPatientDataDefinition(dataDef)) {
+			return evaluateSqlPatientDataDefinition(dataDef, patientId, context);
+		}
+		Object value = typedValues != null ? typedValues.get(patientId) : null;
+		return unwrapValue(value, colDef);
+	}
+	
+	/**
+	 * Pre-evaluates every non-SQL column's data definition once over the cohort, returning a
+	 * per-column map of patientId -&gt; value. Person-level definitions are evaluated via
+	 * PersonDataService (patient ids are person ids); patient-level definitions via
+	 * PatientDataService.
+	 */
+	private Map<String, Map<Integer, Object>> preEvaluateColumns(Map<String, ColumnDefinition> columns,
+	        EvaluationContext context) {
+		Map<String, Map<Integer, Object>> result = new HashMap<String, Map<Integer, Object>>();
+		PersonDataService personDataService = null;
+		PatientDataService patientDataService = null;
+		
+		for (Map.Entry<String, ColumnDefinition> entry : columns.entrySet()) {
+			ColumnDefinition colDef = entry.getValue();
+			DataDefinition dataDef = colDef.getDataDefinition();
+			if (isSqlPatientDataDefinition(dataDef)) {
+				continue; // handled per-patient by SQL execution
+			}
+			Map<Integer, Object> values;
+			try {
+				if (dataDef instanceof PersonDataDefinition) {
+					if (personDataService == null) {
+						personDataService = Context.getService(PersonDataService.class);
+					}
+					values = personDataService.evaluate((PersonDataDefinition) dataDef, context).getData();
+				} else if (dataDef instanceof PatientDataDefinition) {
+					if (patientDataService == null) {
+						patientDataService = Context.getService(PatientDataService.class);
+					}
+					values = patientDataService.evaluate((PatientDataDefinition) dataDef, context).getData();
+				} else {
+					log.warn("Unsupported data definition type for cohort evaluation: {}", dataDef.getClass()
+					        .getSimpleName());
+					values = new HashMap<Integer, Object>();
+				}
+			}
+			catch (Exception e) {
+				log.error("Failed to evaluate column {} over cohort: {}", colDef.getKey(), e.getMessage(), e);
+				values = new HashMap<Integer, Object>();
+			}
+			result.put(entry.getKey(), values);
+		}
+		return result;
+	}
+	
+	/**
+	 * Converts a resolved data value into a display value: applies the column converter when
+	 * present, otherwise unwraps known OpenMRS value objects (PersonName, PatientIdentifier,
+	 * PersonAttribute, PersonAddress) into plain scalar values.
+	 */
+	private Object unwrapValue(Object value, ColumnDefinition colDef) {
+		if (value == null) {
+			return null;
+		}
+		
+		if (colDef.getConverter() != null) {
+			try {
+				return colDef.getConverter().convert(value);
+			}
+			catch (Exception e) {
+				log.warn("Converter failed for column {}: {}", colDef.getKey(), e.getMessage());
+			}
+		}
+		
+		// Collapse single-element collections (e.g. identifier lists).
+		if (value instanceof Collection) {
+			Collection<?> collection = (Collection<?>) value;
+			if (collection.isEmpty()) {
+				return null;
+			}
+			value = collection.iterator().next();
+			if (value == null) {
+				return null;
+			}
+		}
+		
+		if (value instanceof PersonName) {
+			return ((PersonName) value).getFullName();
+		}
+		if (value instanceof PatientIdentifier) {
+			return ((PatientIdentifier) value).getIdentifier();
+		}
+		if (value instanceof PersonAttribute) {
+			return ((PersonAttribute) value).getValue();
+		}
+		if (value instanceof PersonAddress) {
+			return extractAddressField((PersonAddress) value, colDef.getAddressField());
+		}
+		return value;
+	}
+	
+	/**
+	 * Extracts a single address field (e.g. cityVillage, address5) from a PersonAddress, falling
+	 * back to the full address string when the field cannot be read.
+	 */
+	private Object extractAddressField(PersonAddress address, String field) {
+		if (field == null || field.trim().isEmpty()) {
+			return address.toString();
+		}
+		try {
+			return new PropertyConverter(PersonAddress.class, field).convert(address);
+		}
+		catch (Exception e) {
+			log.warn("Could not extract address field '{}': {}", field, e.getMessage());
+			return address.toString();
+		}
+	}
+	
+	private boolean isSqlPatientDataDefinition(DataDefinition dataDef) {
+		return dataDef != null && "SqlPatientDataDefinition".equals(dataDef.getClass().getSimpleName());
+	}
+	
+	/**
 	 * Get patient IDs from the base cohort definition SQL
 	 */
 	private Set<Integer> getPatientIdsFromBaseCohort(LegacyGenericReportSchema.ReportDefinition reportConfig,
 	        EvaluationContext context) {
-		Set<Integer> patientIds = new HashSet<>();
-
+		Set<Integer> patientIds = new HashSet<Integer>();
+		
 		LegacyGenericReportSchema.BaseCohortDefinition baseCohort = reportConfig.getBaseCohortDefinition();
 		if (baseCohort == null) {
 			throw new RuntimeException("Base cohort definition is required");
 		}
-
+		
 		if (!"SQL".equalsIgnoreCase(baseCohort.getType())) {
 			throw new RuntimeException("Only SQL base cohort definitions are supported, got: " + baseCohort.getType());
 		}
-
+		
 		Map<String, Object> config = baseCohort.getConfig();
 		if (config == null || !config.containsKey("sql")) {
 			throw new RuntimeException("Base cohort definition missing SQL query");
 		}
-
+		
 		String sql = (String) config.get("sql");
 		sql = applyDatePlaceholders(sql, context);
-
+		
 		try {
 			SqlQueryBuilder queryBuilder = new SqlQueryBuilder(sql);
 			List<Object[]> results = evaluationService.evaluateToList(queryBuilder, context);
-
+			
 			for (Object[] row : results) {
 				if (row != null && row.length > 0) {
 					Object id = row[0];
 					if (id instanceof Number) {
 						patientIds.add(((Number) id).intValue());
-					}
-					else if (id != null) {
+					} else if (id != null) {
 						try {
 							patientIds.add(Integer.parseInt(id.toString()));
 						}
@@ -163,7 +314,7 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 			log.error("Failed to execute base cohort SQL: {}", e.getMessage(), e);
 			throw new RuntimeException("Failed to execute base cohort SQL: " + e.getMessage(), e);
 		}
-
+		
 		return patientIds;
 	}
 	
@@ -188,14 +339,13 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 	/**
 	 * Build column definitions from the dataset configuration
 	 */
-	private Map<String, ColumnDefinition> buildColumnDefinitions(
-	        LegacyGenericReportSchema.DataSetDefinition patientDataSet) {
-		Map<String, ColumnDefinition> columns = new LinkedHashMap<>();
-
+	private Map<String, ColumnDefinition> buildColumnDefinitions(LegacyGenericReportSchema.DataSetDefinition patientDataSet) {
+		Map<String, ColumnDefinition> columns = new LinkedHashMap<String, ColumnDefinition>();
+		
 		if (patientDataSet.getColumns() == null) {
 			return columns;
 		}
-
+		
 		for (LegacyGenericReportSchema.Column column : patientDataSet.getColumns()) {
 			String key = column.getKey();
 			if (key == null || key.trim().isEmpty()) {
@@ -205,52 +355,28 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 				log.warn("Column missing key and name, skipping");
 				continue;
 			}
-
+			
 			LegacyGenericReportSchema.DataDefinition dataDef = column.getDataDefinition();
 			if (dataDef == null) {
 				log.warn("Column {} missing data definition, skipping", key);
 				continue;
 			}
-
+			
 			DataDefinition resolvedDataDef = dataDefinitionResolver.resolveDataDefinition(dataDef);
 			if (resolvedDataDef == null) {
 				log.warn("Could not resolve data definition for column {}, skipping", key);
 				continue;
 			}
-
+			
 			DataConverter converter = null;
 			if (column.getConverter() != null) {
 				converter = converterResolver.resolveConverter(column.getConverter());
 			}
-
-			columns.put(key, new ColumnDefinition(key, column.getName(), resolvedDataDef, converter));
+			
+			columns.put(key, new ColumnDefinition(key, column.getName(), resolvedDataDef, converter, dataDef.getConfig()));
 		}
-
+		
 		return columns;
-	}
-	
-	/**
-	 * Evaluate a single column for a specific patient
-	 */
-	private Object evaluateColumnForPatient(ColumnDefinition colDef, Integer patientId, EvaluationContext context) {
-		try {
-			DataDefinition dataDef = colDef.getDataDefinition();
-			
-			// For SqlPatientDataDefinition, extract and execute the SQL
-			if (dataDef.getClass().getSimpleName().equals("SqlPatientDataDefinition")) {
-				return evaluateSqlPatientDataDefinition(dataDef, patientId, context);
-			}
-			
-			// For other data definitions, return null for now
-			// TODO: Implement support for other data definition types
-			log.warn("Unsupported data definition type: {}", dataDef.getClass().getSimpleName());
-			return null;
-			
-		}
-		catch (Exception e) {
-			log.error("Failed to evaluate column {} for patient {}: {}", colDef.getKey(), patientId, e.getMessage());
-			return null;
-		}
 	}
 	
 	/**
@@ -343,11 +469,15 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 		
 		private final DataConverter converter;
 		
-		public ColumnDefinition(String key, String name, DataDefinition dataDefinition, DataConverter converter) {
+		private final Map<String, Object> rawConfig;
+		
+		public ColumnDefinition(String key, String name, DataDefinition dataDefinition, DataConverter converter,
+		    Map<String, Object> rawConfig) {
 			this.key = key;
 			this.name = name;
 			this.dataDefinition = dataDefinition;
 			this.converter = converter;
+			this.rawConfig = rawConfig;
 		}
 		
 		public String getKey() {
@@ -364,6 +494,20 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 		
 		public DataConverter getConverter() {
 			return converter;
+		}
+		
+		/**
+		 * The address field to extract (e.g. cityVillage, address5) for PERSON_ADDRESS columns,
+		 * read from the raw data definition config.
+		 */
+		public String getAddressField() {
+			if (rawConfig != null) {
+				Object field = rawConfig.get("field");
+				if (field != null) {
+					return field.toString();
+				}
+			}
+			return null;
 		}
 	}
 }
