@@ -28,7 +28,8 @@ import java.util.regex.Pattern;
  * {@code version}, {@code type}, {@code _builder}, etc.) that the runtime evaluator does not
  * understand. This compiler strips all of that and normalizes the remaining structure:
  * <ul>
- * <li>SQL bind parameters are unquoted ({@code ':startDate'} -&gt; {@code :startDate}).</li>
+ * <li>SQL bind parameters are unquoted ({@code ':startDate'} -&gt; {@code :startDate}) for OpenMRS
+ * {@code SqlQueryBuilder}.</li>
  * <li>Simple {@code table.column} references are compiled to proper OpenMRS data definition types
  * (e.g. {@code person.gender} -&gt; {@code PERSON_ATTRIBUTE GENDER} , {@code mamba_*} /
  * {@code etl_*} tables -&gt; per-row {@code :patientId} subqueries).</li>
@@ -41,6 +42,9 @@ import java.util.regex.Pattern;
  * </ul>
  * This is a faithful Java port of the frontend {@code compileToBackendConfig()} in
  * {@code openmrs-esm-report-builder/src/types/linelist/compile-config.ts}.
+ * <p>
+ * <b>Parameter format note:</b> SQL uses {@code :startDate} / {@code :endDate} format (not
+ * {@code $ startDate} ). This matches the AggregateDataSetEvaluator convention.
  */
 public final class LinelistConfigCompiler {
 	
@@ -126,15 +130,17 @@ public final class LinelistConfigCompiler {
 	}
 	
 	/**
-	 * Rule: unquote SQL bind parameters so the backend treats them as parameters.
-	 * {@code ':startDate'} -&gt; {@code :startDate}, {@code ":endDate"} -&gt; {@code :endDate}.
+	 * Rule: unquote SQL bind parameters to OpenMRS reporting format. {@code ':startDate'} -&gt;
+	 * {@code :startDate} , {@code ":endDate"} -&gt; {@code :endDate} .
 	 */
 	private static String compileSqlParams(String sql) {
 		if (sql == null || sql.isEmpty()) {
 			return sql == null ? "" : sql;
 		}
+		// Unquote quoted parameters: ':startDate' -> :startDate
 		String result = QUOTED_PARAM_SINGLE.matcher(sql).replaceAll(":$1");
 		result = QUOTED_PARAM_DOUBLE.matcher(result).replaceAll(":$1");
+		
 		return result;
 	}
 	
@@ -237,17 +243,17 @@ public final class LinelistConfigCompiler {
 			        : null, null);
 		}
 		
-		// CALCULATION: resolve onDate (true -> "${startDate}")
+		// CALCULATION: resolve onDate (true -> ":startDate")
 		if ("CALCULATION".equalsIgnoreCase(defType)) {
 			ObjectNode cfg = defConfig.deepCopy();
 			JsonNode onDateNode = cfg.path("onDate");
 			String onDate;
 			if (onDateNode.isBoolean() && onDateNode.asBoolean()) {
-				onDate = "${startDate}";
+				onDate = ":startDate";
 			} else if (onDateNode.isTextual() && !onDateNode.asText().isEmpty()) {
 				onDate = onDateNode.asText();
 			} else {
-				onDate = "${startDate}";
+				onDate = ":startDate";
 			}
 			cfg.put("onDate", onDate);
 			// CALCULATION columns do not carry repeatResolution in the builder contract.

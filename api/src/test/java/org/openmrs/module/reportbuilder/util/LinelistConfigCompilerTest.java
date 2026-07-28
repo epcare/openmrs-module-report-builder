@@ -94,7 +94,7 @@ public class LinelistConfigCompilerTest {
 	public void unquotesBindParametersInCohortSql() throws Exception {
 		JsonNode out = compile();
 		String sql = out.path("baseCohortDefinition").path("config").path("sql").asText();
-		Assert.assertTrue("expected unquoted :startDate, was: " + sql, sql.contains("BETWEEN :startDate AND :endDate"));
+		Assert.assertTrue("expected :startDate, was: " + sql, sql.contains("BETWEEN :startDate AND :endDate"));
 		Assert.assertFalse("quoted param must be removed: " + sql, sql.contains("':startDate'"));
 	}
 	
@@ -136,7 +136,7 @@ public class LinelistConfigCompilerTest {
 		
 		JsonNode age = column(columns, "Age");
 		Assert.assertEquals("CALCULATION", age.path("dataDefinition").path("type").asText());
-		Assert.assertEquals("${startDate}", age.path("dataDefinition").path("config").path("onDate").asText());
+		Assert.assertEquals(":startDate", age.path("dataDefinition").path("config").path("onDate").asText());
 		
 		JsonNode clinic = column(columns, "Clinic No");
 		Assert.assertEquals("IDENTIFIER", clinic.path("dataDefinition").path("type").asText());

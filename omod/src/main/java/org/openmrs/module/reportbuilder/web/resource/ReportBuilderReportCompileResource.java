@@ -93,6 +93,7 @@ public class ReportBuilderReportCompileResource extends DelegatingCrudResource<R
 	public DelegatingResourceDescription getCreatableProperties() {
 		DelegatingResourceDescription d = new DelegatingResourceDescription();
 		d.addRequiredProperty("reportUuid");
+		d.addProperty("reportUuid");
 		return d;
 	}
 	

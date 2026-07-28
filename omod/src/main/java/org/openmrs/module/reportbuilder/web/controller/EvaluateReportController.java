@@ -27,11 +27,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import javax.servlet.http.HttpServletRequest;
+import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.List;
 import java.util.Map;
 import java.util.Iterator;
@@ -106,9 +111,31 @@ public class EvaluateReportController {
 			ReportData reportData = reportDefinitionService.evaluate(reportDefinition, evaluationContext);
 			
 			if ("list".equals(normalizedRenderType)) {
+				// Check if this is a linelist report - if so, also include HTML rendering
+				ReportDesign jsonDesign = findReportDesign(reportDefinition, "JSON");
+				boolean isLinelist = jsonDesign != null && isLinelistReportDesign(jsonDesign);
+				
 				Map<String, List<SimpleObject>> out = new HashMap<String, List<SimpleObject>>();
 				for (Map.Entry<String, DataSet> e : reportData.getDataSets().entrySet()) {
 					out.put(e.getKey(), convertDataSetToSimpleObject(e.getValue()));
+				}
+				
+				// For linelist reports, also add HTML rendering to the response
+				if (isLinelist && jsonDesign != null) {
+					try {
+						String html = reportBuilderService.buildRenderedOutput(reportData, jsonDesign, null);
+						// Parse the rendered output to extract just the HTML
+						com.fasterxml.jackson.databind.JsonNode renderedJson = new com.fasterxml.jackson.databind.ObjectMapper()
+						        .readTree(html);
+						if (renderedJson.has("html")) {
+							SimpleObject meta = new SimpleObject();
+							meta.put("html", renderedJson.path("html").asText());
+							out.put("_html", Collections.singletonList(meta));
+						}
+					}
+					catch (Exception e) {
+						// If HTML generation fails, still return the JSON data
+					}
 				}
 				
 				return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(out);
@@ -211,6 +238,38 @@ public class EvaluateReportController {
 		}
 		
 		return null;
+	}
+	
+	/**
+	 * Detects if a report design is for a linelist report by checking the template JSON for
+	 * baseCohortDefinition and dataSetDefinitions keys.
+	 */
+	private boolean isLinelistReportDesign(ReportDesign reportDesign) {
+		if (reportDesign == null || reportDesign.getResources() == null) {
+			return false;
+		}
+		
+		for (org.openmrs.module.reporting.report.ReportDesignResource resource : reportDesign.getResources()) {
+			if ("template".equals(resource.getName())) {
+				byte[] content = resource.getContents();
+				if (content != null && content.length > 0) {
+					try {
+						String templateJson = new String(content, StandardCharsets.UTF_8);
+						com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+						com.fasterxml.jackson.databind.JsonNode config = mapper.readTree(templateJson);
+						// Linelist reports have baseCohortDefinition and dataSetDefinitions, not groups
+						return config.has("baseCohortDefinition") && config.has("dataSetDefinitions")
+						        && !config.has("groups");
+					}
+					catch (Exception e) {
+						// If parsing fails, assume it's not a linelist report
+						return false;
+					}
+				}
+			}
+		}
+		
+		return false;
 	}
 	
 	private Map<String, Object> resolveParameterValues(HttpServletRequest request, ReportDefinition rd) {

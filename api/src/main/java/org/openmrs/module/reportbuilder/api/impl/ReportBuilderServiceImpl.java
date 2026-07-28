@@ -42,8 +42,10 @@ import org.openmrs.module.reportbuilder.legacyconfig.validator.ConfigValidator;
 import org.openmrs.module.reportbuilder.model.*;
 import org.openmrs.module.reportbuilder.util.IndicatorSqlSync;
 import org.openmrs.module.reportbuilder.util.IndicatorValidator;
+import org.openmrs.module.reportbuilder.util.LineListReportDefinitionExpander;
 import org.openmrs.module.reportbuilder.util.LinelistConfigCompiler;
 import org.openmrs.module.reportbuilder.util.ReportDesignFileUtil;
+import org.openmrs.module.reportbuilder.util.LinelistHtmlRenderer;
 import org.openmrs.module.reportbuilder.util.ReportDesignHtmlRenderer;
 import org.openmrs.module.reportbuilder.util.data.definition.AggregateReportDataSetDefinition;
 import org.openmrs.module.reportbuilder.util.data.definition.LineListDataSetDefinition;
@@ -100,6 +102,8 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	private ReportBuilderDAO dao;
 	
 	private final ReportDesignHtmlRenderer reportDesignHtmlRenderer = new ReportDesignHtmlRenderer();
+	
+	private final LinelistHtmlRenderer linelistHtmlRenderer = new LinelistHtmlRenderer();
 	
 	private final ObjectMapper objectMapper = new ObjectMapper();
 	
@@ -322,6 +326,15 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			return createLegacyPayloadJson(reportData, reportDesign);
 		}
 		
+		String templateJson = readDesignResource(reportDesign);
+		
+		// Detect if this is a linelist report
+		if (isLinelistReportTemplate(templateJson)) {
+			LinelistHtmlRenderer.Result result = linelistHtmlRenderer.convert(reportData, reportDesign);
+			return result.payloadJson;
+		}
+		
+		// Default to aggregate report rendering
 		Map<String, Object> values = extractFlatValues(reportData);
 		return createPayloadJsonFromTemplate(reportData, reportDesign, "json", values, null);
 	}
@@ -336,14 +349,44 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 	@Override
 	public String buildPreviewHtml(ReportData reportData, ReportDesign reportDesign) {
 		String templateJson = readDesignResource(reportDesign);
+		
+		// Detect if this is a linelist report
+		if (isLinelistReportTemplate(templateJson)) {
+			LinelistHtmlRenderer.Result result = linelistHtmlRenderer.convert(reportData, reportDesign);
+			return result.html;
+		}
+		
+		// Default to aggregate report rendering
 		Map<String, Object> values = extractFlatValues(reportData);
 		return reportDesignHtmlRenderer.convert(templateJson, values, null).html;
 	}
 	
 	public String buildRenderedOutput(ReportData reportData, ReportDesign reportDesign, String remapJsonOptional) {
 		String templateJson = readDesignResource(reportDesign);
+		
+		// Detect if this is a linelist report by checking for baseCohortDefinition
+		if (isLinelistReportTemplate(templateJson)) {
+			LinelistHtmlRenderer.Result result = linelistHtmlRenderer.convert(reportData, reportDesign);
+			return result.renderedOutputJson;
+		}
+		
+		// Default to aggregate report rendering
 		Map<String, Object> values = extractFlatValues(reportData);
 		return reportDesignHtmlRenderer.buildRenderedOutputOnly(templateJson, values, remapJsonOptional);
+	}
+	
+	/**
+	 * Detects if the report template is a linelist report by checking for baseCohortDefinition and
+	 * dataSetDefinitions keys (linelist schema) versus groups/definition (aggregate schema).
+	 */
+	private boolean isLinelistReportTemplate(String templateJson) {
+		try {
+			JsonNode config = objectMapper.readTree(templateJson);
+			return config.has("baseCohortDefinition") && config.has("dataSetDefinitions") && !config.has("groups");
+		}
+		catch (Exception e) {
+			return false;
+		}
 	}
 	
 	private String getYearAndQuarter(Date date) {
@@ -853,7 +896,8 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 			AggregateReportDataSetDefinition dsd = new AggregateReportDataSetDefinition();
 			dsd.setName(report.getName() + " Data Set");
 			dsd.setDescription(report.getDescription());
-			dsd.setReportDesign(definitionFile);
+			// Store only the relative filename instead of absolute path for portability
+			dsd.setReportDesignPath(definitionFileName);
 			dsd.addParameter(new Parameter("startDate", "Start Date", Date.class));
 			dsd.addParameter(new Parameter("endDate", "End Date", Date.class));
 			
@@ -945,7 +989,8 @@ public class ReportBuilderServiceImpl extends BaseOpenmrsService implements Repo
 		LineListDataSetDefinition dsd = new LineListDataSetDefinition();
 		dsd.setName(report.getName() + " Data Set");
 		dsd.setDescription(report.getDescription());
-		dsd.setReportDesign(definitionFile);
+		// Store only the relative filename instead of absolute path for portability
+		dsd.setReportDesignPath(definitionFileName);
 		
 		reportDefinition.setName(report.getName());
 		reportDefinition.setDescription(report.getDescription());
