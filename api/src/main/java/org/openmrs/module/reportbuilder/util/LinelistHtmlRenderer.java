@@ -282,7 +282,7 @@ public class LinelistHtmlRenderer {
 		        + "table.linelist-table{border-collapse:collapse;width:100%;margin-bottom:20px;}"
 		        + "table.linelist-table th,table.linelist-table td{border:1px solid #ddd;padding:8px;"
 		        + "font-size:12px;text-align:left;}"
-		        + "table.linelist-table th{background:#f6f6f6;font-weight:bold;position:sticky;top:0;}"
+		        + "table.linelist-table th{font-weight:bold;position:sticky;top:0;}"
 		        + "table.linelist-table tbody tr:nth-child(even){background:#f9f9f9;}"
 		        + "table.linelist-table tbody tr:hover{background:#f0f0f0;}";
 	}
