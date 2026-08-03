@@ -12,6 +12,14 @@ public class ReportBuilderReportCompileResult {
 	
 	private Boolean compiled;
 	
+	private String category;
+	
+	private Boolean addedToLibrary;
+	
+	private String reportLibraryUuid;
+	
+	private String compiledJson;
+	
 	public String getReportUuid() {
 		return reportUuid;
 	}
@@ -50,5 +58,37 @@ public class ReportBuilderReportCompileResult {
 	
 	public void setCompiled(Boolean compiled) {
 		this.compiled = compiled;
+	}
+	
+	public String getCategory() {
+		return category;
+	}
+	
+	public void setCategory(String category) {
+		this.category = category;
+	}
+	
+	public Boolean getAddedToLibrary() {
+		return addedToLibrary;
+	}
+	
+	public void setAddedToLibrary(Boolean addedToLibrary) {
+		this.addedToLibrary = addedToLibrary;
+	}
+	
+	public String getReportLibraryUuid() {
+		return reportLibraryUuid;
+	}
+	
+	public void setReportLibraryUuid(String reportLibraryUuid) {
+		this.reportLibraryUuid = reportLibraryUuid;
+	}
+	
+	public String getCompiledJson() {
+		return compiledJson;
+	}
+	
+	public void setCompiledJson(String compiledJson) {
+		this.compiledJson = compiledJson;
 	}
 }

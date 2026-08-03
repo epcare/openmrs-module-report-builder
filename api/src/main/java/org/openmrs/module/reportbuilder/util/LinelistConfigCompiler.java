@@ -156,7 +156,11 @@ public final class LinelistConfigCompiler {
 	}
 	
 	/**
-	 * Rule: keep {@code name/label/type/required}, drop the builder-only {@code config} field.
+	 * Rule: preserve the entire parameter node including {@code name/label/type/required/config/
+	 * defaultValue/displayOrder}, not just the four core fields. This ensures the frontend receives
+	 * the full parameter configuration needed to render proper input controls (e.g., dateRangeMode,
+	 * relativePeriod, options for LIST types, validation rules, etc.).
+	 * <p>
 	 * Falls back to the standard {@code startDate}/{@code endDate} date parameters when none are
 	 * declared.
 	 */
@@ -172,8 +176,8 @@ public final class LinelistConfigCompiler {
 			if (paramName.isEmpty()) {
 				continue;
 			}
-			out.add(newParameter(paramName, p.path("label").asText(paramName), p.path("type").asText("DATE"),
-			    p.path("required").asBoolean(false)));
+			// Preserve entire parameter node including config, defaultValue, displayOrder
+			out.add((JsonNode) p.deepCopy());
 		}
 		return out;
 	}

@@ -24,6 +24,7 @@ import org.openmrs.module.reportbuilder.contract.LegacyGenericReportSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -68,6 +69,10 @@ public class GenericDataDefinitionResolver {
 					return resolveCalculationDefinition(jsonDef);
 				case "SQL":
 					return resolveSqlDataDefinition(jsonDef);
+				case "OBSERVATION":
+					return resolveObservationDefinition(jsonDef);
+				case "ENCOUNTER_DIAGNOSIS":
+					return resolveEncounterDiagnosisDefinition(jsonDef);
 				default:
 					log.warn("Unknown data definition type: {}, attempting SQL as fallback", type);
 					return resolveSqlDataDefinition(jsonDef);
@@ -362,5 +367,379 @@ public class GenericDataDefinitionResolver {
 			log.error("Failed to create SQL data definition: " + e.getMessage(), e);
 			return null;
 		}
+	}
+	
+	/**
+	 * Resolve observation data definition Fetches observation values from the obs table based on
+	 * concept UUID and column modifiers
+	 */
+	private DataDefinition resolveObservationDefinition(LegacyGenericReportSchema.DataDefinition jsonDef) {
+		Map<String, Object> config = jsonDef.getConfig();
+		if (config == null) {
+			log.warn("Observation definition missing config");
+			return null;
+		}
+		
+		String conceptUuid = (String) config.get("conceptUuid");
+		if (conceptUuid == null) {
+			log.warn("Observation definition missing conceptUuid");
+			return null;
+		}
+		
+		String conceptName = (String) config.get("conceptName");
+		String columnModifier = (String) config.getOrDefault("columnModifier", "MOST_RECENT");
+		Object modifierCountObj = config.get("modifierCount");
+		int modifierCount = modifierCountObj != null ? Integer.parseInt(modifierCountObj.toString()) : 1;
+		Boolean returnDisplay = (Boolean) config.getOrDefault("returnDisplay", Boolean.TRUE);
+		
+		@SuppressWarnings("unchecked")
+		List<String> extraValues = (List<String>) config.get("extraValues");
+		
+		try {
+			String sql = buildObservationSql(conceptUuid, columnModifier, modifierCount, returnDisplay, extraValues);
+			
+			SqlPatientDataDefinition sqlDef = new SqlPatientDataDefinition();
+			sqlDef.setSql(sql);
+			
+			String name = "Observation: " + (conceptName != null ? conceptName : conceptUuid);
+			sqlDef.setName(name);
+			
+			log.info("Resolved observation definition for concept: {} with modifier: {}", conceptUuid, columnModifier);
+			return sqlDef;
+		}
+		catch (Exception e) {
+			log.error("Failed to resolve observation definition for concept: " + conceptUuid, e);
+			return null;
+		}
+	}
+	
+	/**
+	 * Resolve encounter diagnosis data definition Fetches diagnosis values from the
+	 * encounter_diagnosis table based on filters
+	 */
+	private DataDefinition resolveEncounterDiagnosisDefinition(LegacyGenericReportSchema.DataDefinition jsonDef) {
+		Map<String, Object> config = jsonDef.getConfig();
+		if (config == null) {
+			log.warn("Encounter diagnosis definition missing config");
+			return null;
+		}
+		
+		String conceptUuid = (String) config.get("conceptUuid");
+		String conceptName = (String) config.get("conceptName");
+		String rank = (String) config.getOrDefault("rank", "ANY");
+		Boolean confirmedOnly = (Boolean) config.getOrDefault("confirmedOnly", Boolean.FALSE);
+		String strategy = (String) config.getOrDefault("strategy", "LATEST");
+		
+		try {
+			String sql = buildDiagnosisSql(conceptUuid, rank, confirmedOnly, strategy);
+			
+			SqlPatientDataDefinition sqlDef = new SqlPatientDataDefinition();
+			sqlDef.setSql(sql);
+			
+			String name = "Diagnosis: " + (conceptName != null ? conceptName : (conceptUuid != null ? conceptUuid : "All"));
+			sqlDef.setName(name);
+			
+			log.info("Resolved encounter diagnosis definition for concept: {} with rank: {}", conceptUuid, rank);
+			return sqlDef;
+		}
+		catch (Exception e) {
+			log.error("Failed to resolve encounter diagnosis definition for concept: " + conceptUuid, e);
+			return null;
+		}
+	}
+	
+	/**
+	 * Build SQL query for observation data retrieval
+	 */
+	private String buildObservationSql(String conceptUuid, String columnModifier, int modifierCount, Boolean returnDisplay,
+	        List<String> extraValues) {
+		return buildObservationSql(conceptUuid, columnModifier, modifierCount, returnDisplay, extraValues, 0);
+	}
+	
+	/**
+	 * Build SQL query for observation data retrieval with offset support Used for multi-column
+	 * expansion (e.g., weight_1, weight_2, weight_3)
+	 */
+	private String buildObservationSql(String conceptUuid, String columnModifier, int modifierCount, Boolean returnDisplay,
+	        List<String> extraValues, int offset) {
+		
+		StringBuilder sql = new StringBuilder();
+		
+		// Determine which fields to select based on extra values
+		if (extraValues != null && !extraValues.isEmpty()) {
+			// Build SELECT clause with extra values
+			sql.append("SELECT ");
+			
+			for (int i = 0; i < extraValues.size(); i++) {
+				String ev = extraValues.get(i);
+				switch (ev) {
+					case "obsDatetime":
+						sql.append("o.obs_datetime");
+						break;
+					case "location":
+						sql.append("l.name as location_name");
+						break;
+					case "comment":
+						sql.append("o.comment");
+						break;
+					case "encounterType":
+						sql.append("et.name as encounter_type_name");
+						break;
+					case "provider":
+						sql.append("pr.name as provider_name");
+						break;
+					default:
+						sql.append("NULL");
+						break;
+				}
+				if (i < extraValues.size() - 1) {
+					sql.append(", ");
+				}
+			}
+			sql.append(", ");
+		} else {
+			sql.append("SELECT ");
+		}
+		
+		// Build the main value expression
+		sql.append(buildObservationValueExpression(returnDisplay));
+		
+		// Apply column modifier logic
+		if ("ANY".equalsIgnoreCase(columnModifier)) {
+			sql.append(" FROM obs o");
+		} else if ("FIRST".equalsIgnoreCase(columnModifier)) {
+			sql.append(" FROM obs o");
+		} else if ("MOST_RECENT".equalsIgnoreCase(columnModifier)) {
+			sql.append(" FROM obs o");
+		} else if ("FIRST_N".equalsIgnoreCase(columnModifier)) {
+			sql.append(" FROM obs o");
+		} else if ("MOST_RECENT_N".equalsIgnoreCase(columnModifier)) {
+			sql.append(" FROM obs o");
+		} else {
+			// Default to MOST_RECENT
+			sql.append(" FROM obs o");
+		}
+		
+		// Add joins for extra values
+		if (extraValues != null
+		        && (extraValues.contains("location") || extraValues.contains("encounterType") || extraValues
+		                .contains("provider"))) {
+			if (extraValues.contains("location")) {
+				sql.append(" LEFT JOIN location l ON o.location_id = l.location_id");
+			}
+			if (extraValues.contains("encounterType") || extraValues.contains("provider")) {
+				sql.append(" LEFT JOIN encounter e ON o.encounter_id = e.encounter_id");
+			}
+			if (extraValues.contains("encounterType")) {
+				sql.append(" LEFT JOIN encounter_type et ON e.encounter_type_id = et.encounter_type_id");
+			}
+			if (extraValues.contains("provider")) {
+				sql.append(" LEFT JOIN provider p ON o.provider_id = p.provider_id");
+				sql.append(" LEFT JOIN person pr ON p.person_id = pr.person_id");
+			}
+		}
+		
+		// Add WHERE clause
+		sql.append(" WHERE o.person_id = :patientId");
+		sql.append(" AND o.concept_id = (SELECT concept_id FROM concept WHERE uuid = '").append(conceptUuid).append("')");
+		sql.append(" AND o.voided = 0");
+		
+		// Add date filters only for ANY modifier
+		// For MOST_RECENT/FIRST modifiers, we want the actual most recent/first observation regardless of date
+		if ("ANY".equalsIgnoreCase(columnModifier)) {
+			sql.append(" AND (:startDate IS NULL OR o.obs_datetime >= :startDate)");
+			sql.append(" AND (:endDate IS NULL OR o.obs_datetime <= :endDate)");
+		}
+		
+		// Add ORDER BY and LIMIT based on column modifier
+		if ("FIRST".equalsIgnoreCase(columnModifier) || "MOST_RECENT".equalsIgnoreCase(columnModifier)
+		        || "FIRST_N".equalsIgnoreCase(columnModifier) || "MOST_RECENT_N".equalsIgnoreCase(columnModifier)) {
+			if ("FIRST".equalsIgnoreCase(columnModifier) || "FIRST_N".equalsIgnoreCase(columnModifier)) {
+				sql.append(" ORDER BY o.obs_datetime ASC");
+			} else {
+				sql.append(" ORDER BY o.obs_datetime DESC");
+			}
+			// Use LIMIT 1 with OFFSET for multi-column expansion
+			sql.append(" LIMIT 1");
+			if (offset > 0) {
+				sql.append(" OFFSET ").append(offset);
+			}
+		} else if ("ANY".equalsIgnoreCase(columnModifier)) {
+			// Use GROUP_CONCAT to aggregate all values
+			sql = new StringBuilder();
+			sql.append("SELECT GROUP_CONCAT(");
+			sql.append(buildObservationValueExpression(returnDisplay));
+			sql.append(" ORDER BY o.obs_datetime DESC SEPARATOR ', ') as observation_value");
+			sql.append(" FROM obs o");
+			sql.append(" WHERE o.person_id = :patientId");
+			sql.append(" AND o.concept_id = (SELECT concept_id FROM concept WHERE uuid = '").append(conceptUuid)
+			        .append("')");
+			sql.append(" AND o.voided = 0");
+			sql.append(" AND (:startDate IS NULL OR o.obs_datetime >= :startDate)");
+			sql.append(" AND (:endDate IS NULL OR o.obs_datetime <= :endDate)");
+		}
+		
+		return sql.toString();
+	}
+	
+	/**
+	 * Build the value expression for observation SELECT clause
+	 */
+	private String buildObservationValueExpression(Boolean returnDisplay) {
+		if (returnDisplay) {
+			return "CASE "
+			        + "WHEN o.value_coded IS NOT NULL THEN "
+			        + "(SELECT name FROM concept_name WHERE concept_id = o.value_coded AND locale = 'en' AND concept_name_type = 'FULLY_SPECIFIED' LIMIT 1) "
+			        + "WHEN o.value_numeric IS NOT NULL THEN CAST(o.value_numeric AS CHAR) "
+			        + "ELSE COALESCE(o.value_text, '') " + "END";
+		} else {
+			return "CASE " + "WHEN o.value_coded IS NOT NULL THEN CAST(o.value_coded AS CHAR) "
+			        + "WHEN o.value_numeric IS NOT NULL THEN CAST(o.value_numeric AS CHAR) "
+			        + "ELSE COALESCE(o.value_text, '') " + "END";
+		}
+	}
+	
+	/**
+	 * Build SQL query for diagnosis data retrieval
+	 */
+	private String buildDiagnosisSql(String conceptUuid, String rank, Boolean confirmedOnly, String strategy) {
+		StringBuilder sql = new StringBuilder();
+		
+		// Build SELECT clause
+		sql.append("SELECT ");
+		
+		if ("ANY".equalsIgnoreCase(rank) && conceptUuid == null) {
+			// All diagnoses aggregated
+			sql.append("GROUP_CONCAT(");
+			sql.append("(SELECT name FROM concept_name WHERE concept_id = ed.diagnosis AND locale = 'en' AND concept_name_type = 'FULLY_SPECIFIED' LIMIT 1)");
+			sql.append(" ORDER BY e.encounter_datetime DESC SEPARATOR ', ') as diagnosis_value");
+		} else {
+			// Single diagnosis or filtered by concept/rank
+			sql.append("(SELECT name FROM concept_name WHERE concept_id = ed.diagnosis AND locale = 'en' AND concept_name_type = 'FULLY_SPECIFIED' LIMIT 1)");
+			sql.append(" as diagnosis_value");
+		}
+		
+		// Build FROM clause
+		sql.append(" FROM encounter_diagnosis ed");
+		sql.append(" INNER JOIN encounter e ON ed.encounter_id = e.encounter_id");
+		
+		// Build WHERE clause
+		sql.append(" WHERE e.patient_id = :patientId");
+		sql.append(" AND ed.voided = 0");
+		
+		// Add date filters only for non-LATEST/non-EARLIEST strategies
+		// For LATEST/EARLIEST strategies, we want the actual latest/earliest diagnosis regardless of date
+		if (!"LATEST".equalsIgnoreCase(strategy) && !"EARLIEST".equalsIgnoreCase(strategy)) {
+			sql.append(" AND (:startDate IS NULL OR e.encounter_datetime >= :startDate)");
+			sql.append(" AND (:endDate IS NULL OR e.encounter_datetime <= :endDate)");
+		}
+		
+		// Add concept filter if specified
+		if (conceptUuid != null) {
+			sql.append(" AND ed.diagnosis = (SELECT concept_id FROM concept WHERE uuid = '").append(conceptUuid).append("'");
+		}
+		
+		// Add rank filter
+		if (!"ANY".equalsIgnoreCase(rank)) {
+			sql.append(" AND ed.rank = '").append(rank).append("'");
+		}
+		
+		// Add certainty filter
+		if (confirmedOnly) {
+			sql.append(" AND ed.certainty = 'CONFIRMED'");
+		}
+		
+		// Add ORDER BY and LIMIT based on strategy
+		if ("LATEST".equalsIgnoreCase(strategy)) {
+			sql.append(" ORDER BY e.encounter_datetime DESC");
+			sql.append(" LIMIT 1");
+		} else if ("EARLIEST".equalsIgnoreCase(strategy)) {
+			sql.append(" ORDER BY e.encounter_datetime ASC");
+			sql.append(" LIMIT 1");
+		}
+		
+		return sql.toString();
+	}
+	
+	/**
+	 * Create an observation data definition with a specific offset for multi-column expansion Used
+	 * by LineListDataSetEvaluator to expand columns like weight_1, weight_2, etc.
+	 */
+	public DataDefinition createObservationDefinitionWithOffset(LegacyGenericReportSchema.DataDefinition jsonDef, int offset) {
+		if (jsonDef == null || !"OBSERVATION".equalsIgnoreCase(jsonDef.getType())) {
+			return null;
+		}
+		
+		Map<String, Object> config = jsonDef.getConfig();
+		if (config == null) {
+			return null;
+		}
+		
+		String conceptUuid = (String) config.get("conceptUuid");
+		String conceptName = (String) config.get("conceptName");
+		String columnModifier = (String) config.getOrDefault("columnModifier", "MOST_RECENT");
+		Object modifierCountObj = config.get("modifierCount");
+		int modifierCount = modifierCountObj != null ? Integer.parseInt(modifierCountObj.toString()) : 1;
+		Boolean returnDisplay = (Boolean) config.getOrDefault("returnDisplay", Boolean.TRUE);
+		
+		@SuppressWarnings("unchecked")
+		List<String> extraValues = (List<String>) config.get("extraValues");
+		
+		try {
+			String sql = buildObservationSql(conceptUuid, columnModifier, modifierCount, returnDisplay, extraValues, offset);
+			
+			SqlPatientDataDefinition sqlDef = new SqlPatientDataDefinition();
+			sqlDef.setSql(sql);
+			
+			String name = "Observation: " + (conceptName != null ? conceptName : conceptUuid) + " (offset " + offset + ")";
+			sqlDef.setName(name);
+			
+			return sqlDef;
+		}
+		catch (Exception e) {
+			log.error("Failed to create observation definition with offset {} for concept: {}", offset, conceptUuid, e);
+			return null;
+		}
+	}
+	
+	/**
+	 * Check if a data definition should be expanded into multiple columns
+	 */
+	public boolean shouldExpandColumn(LegacyGenericReportSchema.DataDefinition jsonDef) {
+		if (jsonDef == null || !"OBSERVATION".equalsIgnoreCase(jsonDef.getType())) {
+			return false;
+		}
+		
+		Map<String, Object> config = jsonDef.getConfig();
+		if (config == null) {
+			return false;
+		}
+		
+		String columnModifier = (String) config.get("columnModifier");
+		if (!"FIRST_N".equalsIgnoreCase(columnModifier) && !"MOST_RECENT_N".equalsIgnoreCase(columnModifier)) {
+			return false;
+		}
+		
+		Object modifierCountObj = config.get("modifierCount");
+		int modifierCount = modifierCountObj != null ? Integer.parseInt(modifierCountObj.toString()) : 1;
+		
+		return modifierCount > 1;
+	}
+	
+	/**
+	 * Get the modifier count from a data definition config
+	 */
+	public int getModifierCount(LegacyGenericReportSchema.DataDefinition jsonDef) {
+		if (jsonDef == null) {
+			return 1;
+		}
+		
+		Map<String, Object> config = jsonDef.getConfig();
+		if (config == null) {
+			return 1;
+		}
+		
+		Object modifierCountObj = config.get("modifierCount");
+		return modifierCountObj != null ? Integer.parseInt(modifierCountObj.toString()) : 1;
 	}
 }

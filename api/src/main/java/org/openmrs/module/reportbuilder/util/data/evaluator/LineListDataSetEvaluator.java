@@ -3,8 +3,10 @@ package org.openmrs.module.reportbuilder.util.data.evaluator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.openmrs.Cohort;
 import org.openmrs.PatientIdentifier;
+import org.openmrs.PatientIdentifierType;
 import org.openmrs.PersonAddress;
 import org.openmrs.PersonAttribute;
+import org.openmrs.PersonAttributeType;
 import org.openmrs.PersonName;
 import org.openmrs.annotation.Handler;
 import org.openmrs.api.context.Context;
@@ -288,7 +290,9 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 		}
 		
 		String sql = (String) config.get("sql");
-		sql = applyDatePlaceholders(sql, context);
+		sql = decodeHtmlEntities(sql);
+		// Replace all parameter placeholders with resolved values from EvaluationContext
+		sql = replaceParameterPlaceholders(sql, context);
 		
 		try {
 			SqlQueryBuilder queryBuilder = new SqlQueryBuilder(sql);
@@ -362,18 +366,47 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 				continue;
 			}
 			
-			DataDefinition resolvedDataDef = dataDefinitionResolver.resolveDataDefinition(dataDef);
-			if (resolvedDataDef == null) {
-				log.warn("Could not resolve data definition for column {}, skipping", key);
-				continue;
+			// Check if this column should be expanded into multiple columns (e.g., MOST_RECENT_N)
+			if (dataDefinitionResolver.shouldExpandColumn(dataDef)) {
+				int modifierCount = dataDefinitionResolver.getModifierCount(dataDef);
+				log.info("Expanding column {} into {} columns", key, modifierCount);
+				
+				DataConverter converter = null;
+				if (column.getConverter() != null) {
+					converter = converterResolver.resolveConverter(column.getConverter());
+				}
+				
+				// Create N columns with suffixes _1, _2, _3, etc.
+				for (int i = 0; i < modifierCount; i++) {
+					String expandedKey = key + "_" + (i + 1);
+					String expandedName = column.getName() + " " + (i + 1);
+					
+					DataDefinition expandedDataDef = dataDefinitionResolver
+					        .createObservationDefinitionWithOffset(dataDef, i);
+					if (expandedDataDef == null) {
+						log.warn("Could not create expanded data definition for column {}, occurrence {}", key, i + 1);
+						continue;
+					}
+					
+					columns.put(expandedKey, new ColumnDefinition(expandedKey, expandedName, expandedDataDef, converter,
+					        dataDef.getConfig()));
+				}
+			} else {
+				// Single column - normal processing
+				DataDefinition resolvedDataDef = dataDefinitionResolver.resolveDataDefinition(dataDef);
+				if (resolvedDataDef == null) {
+					log.warn("Could not resolve data definition for column {}, skipping", key);
+					continue;
+				}
+				
+				DataConverter converter = null;
+				if (column.getConverter() != null) {
+					converter = converterResolver.resolveConverter(column.getConverter());
+				}
+				
+				columns.put(key,
+				    new ColumnDefinition(key, column.getName(), resolvedDataDef, converter, dataDef.getConfig()));
 			}
-			
-			DataConverter converter = null;
-			if (column.getConverter() != null) {
-				converter = converterResolver.resolveConverter(column.getConverter());
-			}
-			
-			columns.put(key, new ColumnDefinition(key, column.getName(), resolvedDataDef, converter, dataDef.getConfig()));
 		}
 		
 		return columns;
@@ -391,13 +424,17 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 				return null;
 			}
 			
+			// Decode HTML entities in SQL (e.g. &lt; to <)
+			sql = decodeHtmlEntities(sql);
+			
 			// Replace :patientId placeholder with actual patient ID
 			sql = sql.replace(":patientId", String.valueOf(patientId));
 			
-			// Apply date placeholders if present
-			sql = applyDatePlaceholders(sql, context);
+			// Replace all parameter placeholders (dates, locations, concepts, etc.) with resolved values
+			// This handles :startDate, :endDate, :location, :concept, :program, :provider, etc.
+			sql = replaceParameterPlaceholders(sql, context);
 			
-			// Execute the query
+			// Execute the query (all parameters are now resolved, no EvaluationContext binding needed)
 			SqlQueryBuilder queryBuilder = new SqlQueryBuilder(sql);
 			List<Object[]> results = evaluationService.evaluateToList(queryBuilder, context);
 			
@@ -421,39 +458,106 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 	}
 	
 	/**
-	 * Apply date placeholders to SQL query
+	 * Decode HTML entities in SQL string. The JSON configuration may contain HTML entities like
+	 * &lt; &gt; &amp; &quot; which need to be decoded before executing the SQL.
 	 */
-	private String applyDatePlaceholders(String sql, EvaluationContext context) {
+	private String decodeHtmlEntities(String sql) {
+		return sql.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"");
+	}
+	
+	/**
+	 * Replaces all parameter placeholders with resolved values from EvaluationContext. Handles
+	 * Dates, Locations, Programs, and other reference types.
+	 */
+	private String replaceParameterPlaceholders(String sql, EvaluationContext context) {
 		String result = sql;
 		
-		// Get date parameters from context
-		Object startDate = context.getParameterValue("startDate");
-		Object endDate = context.getParameterValue("endDate");
+		// Extract parameter names from SQL (using :parameterName pattern)
+		java.util.Set<String> paramNames = extractParameterNames(sql);
 		
-		if (startDate != null) {
-			String startDateStr = formatDate(startDate);
-			result = result.replace(":startDate", "'" + startDateStr + "'");
-		}
-		
-		if (endDate != null) {
-			String endDateStr = formatDate(endDate);
-			result = result.replace(":endDate", "'" + endDateStr + "'");
+		for (String paramName : paramNames) {
+			Object value = context.getParameterValue(paramName);
+			if (value == null) {
+				continue;
+			}
+			
+			String replacement = formatParameterForSql(value);
+			// Replace :paramName with formatted value
+			result = result.replace(":" + paramName, replacement);
 		}
 		
 		return result;
 	}
 	
 	/**
-	 * Format a date object to YYYY-MM-DD format
+	 * Extracts parameter names from SQL template (e.g., :startDate, :location).
 	 */
-	private String formatDate(Object date) {
-		if (date instanceof Date) {
-			return DateUtil.formatDate((Date) date, "yyyy-MM-dd");
+	private java.util.Set<String> extractParameterNames(String sql) {
+		java.util.Set<String> params = new java.util.HashSet<String>();
+		java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(":(\\w+)");
+		java.util.regex.Matcher matcher = pattern.matcher(sql);
+		
+		while (matcher.find()) {
+			params.add(matcher.group(1));
 		}
-		if (date != null) {
-			return date.toString();
+		
+		return params;
+	}
+	
+	/**
+	 * Formats a parameter value for SQL binding. Handles all LinelistParameterType values: - DATE,
+	 * DATETIME: Date objects with optional time component - LOCATION, CONCEPT, PROGRAM, PROVIDER:
+	 * OpenMRS reference types by UUID - IDENTIFIER_TYPE: PatientIdentifierType by UUID -
+	 * PERSON_ATTRIBUTE: PersonAttributeType by UUID - BOOLEAN: 1/0 for SQL compatibility - NUMBER:
+	 * numeric values - TEXT, LIST: string values - CODED_VALUE: typically a Concept, handled by
+	 * Concept case
+	 */
+	private String formatParameterForSql(Object value) {
+		if (value == null) {
+			return "NULL";
 		}
-		return "";
+		
+		// DATE and DATETIME parameters - check if time component is present
+		if (value instanceof Date) {
+			Date date = (Date) value;
+			// Use datetime format if the date has a time component (not midnight)
+			// or if it's a DATETIME parameter type
+			Calendar cal = Calendar.getInstance();
+			cal.setTime(date);
+			if (cal.get(Calendar.HOUR_OF_DAY) != 0 || cal.get(Calendar.MINUTE) != 0 || cal.get(Calendar.SECOND) != 0
+			        || cal.get(Calendar.MILLISECOND) != 0) {
+				// DATETIME with time component
+				return "'" + DateUtil.formatDate(date, "yyyy-MM-dd HH:mm:ss") + "'";
+			}
+			// DATE only (no time component or time is 00:00:00.000)
+			return "'" + DateUtil.formatDate(date, "yyyy-MM-dd") + "'";
+		}
+		if (value instanceof org.openmrs.Location) {
+			return "'" + ((org.openmrs.Location) value).getUuid() + "'";
+		}
+		if (value instanceof org.openmrs.Program) {
+			return "'" + ((org.openmrs.Program) value).getUuid() + "'";
+		}
+		if (value instanceof org.openmrs.Provider) {
+			return "'" + ((org.openmrs.Provider) value).getUuid() + "'";
+		}
+		if (value instanceof org.openmrs.Concept) {
+			return "'" + ((org.openmrs.Concept) value).getUuid() + "'";
+		}
+		if (value instanceof org.openmrs.PatientIdentifierType) {
+			return "'" + ((org.openmrs.PatientIdentifierType) value).getUuid() + "'";
+		}
+		if (value instanceof org.openmrs.PersonAttributeType) {
+			return "'" + ((org.openmrs.PersonAttributeType) value).getUuid() + "'";
+		}
+		if (value instanceof Boolean) {
+			return Boolean.TRUE.equals(value) ? "1" : "0";
+		}
+		if (value instanceof Number) {
+			return value.toString();
+		}
+		// Default: treat as string (includes UUIDs sent as strings)
+		return "'" + value.toString() + "'";
 	}
 	
 	/**

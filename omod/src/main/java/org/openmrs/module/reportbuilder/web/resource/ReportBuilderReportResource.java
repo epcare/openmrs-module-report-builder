@@ -78,6 +78,8 @@ public class ReportBuilderReportResource extends DelegatingCrudResource<ReportBu
 			d.addProperty("description");
 			d.addProperty("code");
 			d.addProperty("reportType");
+			d.addProperty("category");
+			d.addProperty("compileStatus");
 			d.addProperty("retired");
 			return d;
 		}
@@ -89,8 +91,13 @@ public class ReportBuilderReportResource extends DelegatingCrudResource<ReportBu
 			d.addProperty("description");
 			d.addProperty("code");
 			d.addProperty("reportType");
+			d.addProperty("category");
 			d.addProperty("configJson");
 			d.addProperty("metaJson");
+			d.addProperty("compiledReportDefinitionUuid");
+			d.addProperty("compiledReportDesignUuid");
+			d.addProperty("lastCompiledAt");
+			d.addProperty("compileStatus");
 			d.addProperty("retired");
 			d.addProperty("retireReason");
 			return d;
@@ -106,8 +113,10 @@ public class ReportBuilderReportResource extends DelegatingCrudResource<ReportBu
 		d.addProperty("description");
 		d.addProperty("code");
 		d.addProperty("reportType");
+		d.addProperty("category");
 		d.addProperty("configJson");
 		d.addProperty("metaJson");
+		d.addProperty("compileStatus");
 		return d;
 	}
 	

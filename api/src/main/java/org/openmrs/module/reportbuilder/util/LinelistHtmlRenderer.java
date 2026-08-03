@@ -50,11 +50,11 @@ public class LinelistHtmlRenderer {
 			String templateJson = readDesignResource(reportDesign);
 			JsonNode config = MAPPER.readTree(templateJson);
 			
-			// Extract column definitions from the config
-			List<ColumnDefinition> columns = extractColumnDefinitions(config);
-			
-			// Extract data rows from the report data
+			// Extract data rows from the report data FIRST
 			List<Map<String, Object>> dataRows = extractDataRows(reportData);
+			
+			// Extract column definitions from actual data (handles expanded columns)
+			List<ColumnDefinition> columns = extractColumnDefinitionsFromData(config, dataRows);
 			
 			// Build HTML
 			String html = renderHtmlTable(config, columns, dataRows);
@@ -95,7 +95,9 @@ public class LinelistHtmlRenderer {
 	}
 	
 	/**
-	 * Extracts column definitions from the compiled linelist config.
+	 * Extracts column definitions from the compiled linelist config. Returns columns from actual
+	 * data rows (to handle expanded columns like weight_1, weight_2), with display names from the
+	 * config where available.
 	 */
 	private List<ColumnDefinition> extractColumnDefinitions(JsonNode config) {
 		List<ColumnDefinition> columns = new ArrayList<ColumnDefinition>();
@@ -105,7 +107,8 @@ public class LinelistHtmlRenderer {
 			return columns;
 		}
 		
-		// Get the first PATIENT_DATA_SET
+		// First, extract columns from config for display name mapping
+		Map<String, String> keyToDisplayName = new LinkedHashMap<String, String>();
 		for (JsonNode dsd : dataSetDefinitions) {
 			if ("PATIENT_DATA_SET".equals(dsd.path("type").asText())) {
 				JsonNode columnsNode = dsd.path("columns");
@@ -113,14 +116,138 @@ public class LinelistHtmlRenderer {
 					for (JsonNode col : columnsNode) {
 						String name = col.path("name").asText("");
 						String key = col.has("key") ? col.path("key").asText() : nameToKey(name);
-						columns.add(new ColumnDefinition(key, name));
+						keyToDisplayName.put(key, name);
 					}
 				}
 				break;
 			}
 		}
 		
+		return new ArrayList<ColumnDefinition>(columns);
+	}
+	
+	/**
+	 * Extracts column definitions from actual data rows. This handles expanded columns (e.g.,
+	 * weight_1, weight_2) that aren't in the original config. Uses display names from config where
+	 * available, otherwise formats the key for display.
+	 */
+	private List<ColumnDefinition> extractColumnDefinitionsFromData(JsonNode config, List<Map<String, Object>> dataRows) {
+		List<ColumnDefinition> columns = new ArrayList<ColumnDefinition>();
+		
+		if (dataRows.isEmpty()) {
+			// Fallback to config columns if no data
+			return extractColumnDefinitions(config);
+		}
+		
+		// Extract display name mapping from config
+		Map<String, String> configDisplayNames = new LinkedHashMap<String, String>();
+		JsonNode dataSetDefinitions = config.path("dataSetDefinitions");
+		if (dataSetDefinitions.isArray()) {
+			for (JsonNode dsd : dataSetDefinitions) {
+				if ("PATIENT_DATA_SET".equals(dsd.path("type").asText())) {
+					JsonNode columnsNode = dsd.path("columns");
+					if (columnsNode.isArray()) {
+						for (JsonNode col : columnsNode) {
+							String name = col.path("name").asText("");
+							String key = col.has("key") ? col.path("key").asText() : nameToKey(name);
+							configDisplayNames.put(key, name);
+						}
+					}
+					break;
+				}
+			}
+		}
+		
+		// Extract columns from actual data
+		Map<String, Object> firstRow = dataRows.get(0);
+		for (String columnKey : firstRow.keySet()) {
+			String displayName;
+			
+			// Check if we have a display name from config
+			if (configDisplayNames.containsKey(columnKey)) {
+				displayName = configDisplayNames.get(columnKey);
+			} else {
+				// Check if this is an expanded column (base_name_N pattern)
+				String baseKey = findBaseKeyForExpandedColumn(columnKey, configDisplayNames.keySet());
+				if (baseKey != null && configDisplayNames.containsKey(baseKey)) {
+					String baseName = configDisplayNames.get(baseKey);
+					int occurrence = getOccurrenceNumber(columnKey);
+					displayName = baseName + " " + occurrence;
+				} else {
+					// Format the key for display
+					displayName = formatKeyForDisplay(columnKey);
+				}
+			}
+			
+			columns.add(new ColumnDefinition(columnKey, displayName));
+		}
+		
 		return columns;
+	}
+	
+	/**
+	 * Finds the base key for an expanded column. For example, given "weight_2" and base keys
+	 * ["weight", "name"], returns "weight".
+	 */
+	private String findBaseKeyForExpandedColumn(String expandedKey, Set<String> baseKeys) {
+		for (String baseKey : baseKeys) {
+			if (expandedKey.startsWith(baseKey + "_")) {
+				String suffix = expandedKey.substring(baseKey.length() + 1);
+				try {
+					// Check if suffix is a number
+					Integer.parseInt(suffix);
+					return baseKey;
+				}
+				catch (NumberFormatException e) {
+					// Not a number suffix, continue
+				}
+			}
+		}
+		return null;
+	}
+	
+	/**
+	 * Extracts the occurrence number from an expanded column key. For example, "weight_2" returns
+	 * 2.
+	 */
+	private int getOccurrenceNumber(String columnKey) {
+		int lastUnderscore = columnKey.lastIndexOf('_');
+		if (lastUnderscore > 0) {
+			String suffix = columnKey.substring(lastUnderscore + 1);
+			try {
+				return Integer.parseInt(suffix);
+			}
+			catch (NumberFormatException e) {
+				return 1;
+			}
+		}
+		return 1;
+	}
+	
+	/**
+	 * Formats a column key for display. Converts "patient_name" to "Patient Name", "weight_1" to
+	 * "Weight 1", etc.
+	 */
+	private String formatKeyForDisplay(String key) {
+		if (key == null || key.isEmpty()) {
+			return "";
+		}
+		
+		// Split by underscore and capitalize each part
+		String[] parts = key.split("_");
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < parts.length; i++) {
+			if (i > 0) {
+				sb.append(" ");
+			}
+			if (!parts[i].isEmpty()) {
+				sb.append(Character.toUpperCase(parts[i].charAt(0)));
+				if (parts[i].length() > 1) {
+					sb.append(parts[i].substring(1).toLowerCase());
+				}
+			}
+		}
+		return sb.toString();
 	}
 	
 	/**
@@ -281,8 +408,7 @@ public class LinelistHtmlRenderer {
 		        + ".rowCount{margin-top:10px;font-size:12px;color:#666;}"
 		        + "table.linelist-table{border-collapse:collapse;width:100%;margin-bottom:20px;}"
 		        + "table.linelist-table th,table.linelist-table td{border:1px solid #ddd;padding:8px;"
-		        + "font-size:12px;text-align:left;}"
-		        + "table.linelist-table th{font-weight:bold;position:sticky;top:0;}"
+		        + "font-size:12px;text-align:left;}" + "table.linelist-table th{font-weight:bold;position:sticky;top:0;}"
 		        + "table.linelist-table tbody tr:nth-child(even){background:#f9f9f9;}"
 		        + "table.linelist-table tbody tr:hover{background:#f0f0f0;}";
 	}

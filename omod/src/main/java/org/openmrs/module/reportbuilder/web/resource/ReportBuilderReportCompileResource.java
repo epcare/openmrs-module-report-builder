@@ -3,6 +3,8 @@ package org.openmrs.module.reportbuilder.web.resource;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.reporting.report.definition.ReportDefinition;
 import org.openmrs.module.reportbuilder.api.ReportBuilderService;
+import org.openmrs.module.reportbuilder.model.ReportCategory;
+import org.openmrs.module.reportbuilder.model.ReportLibrary;
 import org.openmrs.module.reportbuilder.web.controller.dto.ReportBuilderReportCompileResult;
 import org.openmrs.module.webservices.rest.web.RequestContext;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -24,7 +26,8 @@ public class ReportBuilderReportCompileResource extends DelegatingCrudResource<R
 	}
 	
 	/**
-	 * POST /ws/rest/v1/reportbuilder/reportcompile Request body: { "reportUuid": "..." }
+	 * POST /ws/rest/v1/reportbuilder/reportcompile Request body: { "reportUuid": "...", "category":
+	 * "category-uuid" }
 	 */
 	@Override
 	public ReportBuilderReportCompileResult save(ReportBuilderReportCompileResult delegate) {
@@ -44,6 +47,83 @@ public class ReportBuilderReportCompileResource extends DelegatingCrudResource<R
 		out.setReportDefinitionName(rd != null ? rd.getName() : null);
 		out.setReportDesignPath(result.getReportDesignFile() != null ? result.getReportDesignFile().getAbsolutePath() : null);
 		out.setCompiled(Boolean.TRUE);
+		// Include compiled config (with parameters) for frontend theme config creation
+		out.setCompiledJson(result.getCompiledJson());
+		
+		// If category is provided, automatically add to report library using the category UUID
+		if (delegate.getCategory() != null && !delegate.getCategory().trim().isEmpty() && rd != null) {
+			try {
+				// Frontend sends category UUID - look up by UUID (not name)
+				String categoryUuid = delegate.getCategory().trim();
+				ReportCategory category = ReportBuilderService.getReportCategoryByUuid(categoryUuid);
+				
+				if (category == null) {
+					// Only log warning if category not found - don't create a new one
+					// The category should already exist in the system
+					System.err.println("Category not found with UUID: " + categoryUuid);
+					out.setAddedToLibrary(Boolean.FALSE);
+					return out;
+				}
+				
+				// Check if report library entry already exists for this report definition
+				ReportLibrary existingEntry = null;
+				for (ReportLibrary rl : ReportBuilderService.getReportLibraries(null, false, 0, null)) {
+					if (rd.getUuid().equals(rl.getReportDefinitionUuid())) {
+						existingEntry = rl;
+						break;
+					}
+				}
+				
+				if (existingEntry != null) {
+					// Update existing entry with latest report metadata
+					existingEntry.setCategory(category);
+					existingEntry.setName(rd.getName());
+					existingEntry.setDescription(rd.getDescription());
+					existingEntry.setReportDefinitionUuid(rd.getUuid());
+					existingEntry.setReportBuilderReportUuid(result.getReportBuilderReport() != null ? result
+					        .getReportBuilderReport().getUuid() : null);
+					if (result.getReportBuilderReport() != null) {
+						existingEntry.setReportType(result.getReportBuilderReport().getReportType());
+					}
+					// Ensure sourceType remains BUILDER for compiled reports
+					existingEntry.setSourceType(ReportLibrary.ReportSourceType.BUILDER);
+					// Update compiled config (including parameters) in metaJson for frontend UI rendering
+					if (result.getCompiledJson() != null) {
+						existingEntry.setMetaJson(result.getCompiledJson());
+					}
+					ReportBuilderService.saveReportLibrary(existingEntry);
+					out.setAddedToLibrary(Boolean.TRUE);
+					out.setReportLibraryUuid(existingEntry.getUuid());
+				} else {
+					// Create new report library entry
+					ReportLibrary reportLibrary = new ReportLibrary();
+					reportLibrary.setReportDefinitionUuid(rd.getUuid());
+					reportLibrary.setName(rd.getName());
+					reportLibrary.setDescription(rd.getDescription());
+					reportLibrary.setCategory(category);
+					reportLibrary.setSourceType(ReportLibrary.ReportSourceType.BUILDER);
+					reportLibrary.setReportBuilderReportUuid(result.getReportBuilderReport() != null ? result
+					        .getReportBuilderReport().getUuid() : null);
+					reportLibrary.setReportType(result.getReportBuilderReport() != null ? result.getReportBuilderReport()
+					        .getReportType()
+					        : org.openmrs.module.reportbuilder.model.ReportBuilderReport.ReportType.AGGREGATE);
+					reportLibrary.setMigrated(Boolean.FALSE);
+					
+					// Store compiled config (including parameters) in metaJson for frontend UI rendering
+					if (result.getCompiledJson() != null) {
+						reportLibrary.setMetaJson(result.getCompiledJson());
+					}
+					
+					ReportLibrary saved = ReportBuilderService.saveReportLibrary(reportLibrary);
+					out.setAddedToLibrary(Boolean.TRUE);
+					out.setReportLibraryUuid(saved.getUuid());
+				}
+			}
+			catch (Exception e) {
+				// Log error but don't fail the compilation
+				out.setAddedToLibrary(Boolean.FALSE);
+			}
+		}
 		
 		return out;
 	}
@@ -84,6 +164,9 @@ public class ReportBuilderReportCompileResource extends DelegatingCrudResource<R
 			d.addProperty("reportDefinitionName");
 			d.addProperty("reportDesignPath");
 			d.addProperty("compiled");
+			d.addProperty("compiledJson");
+			d.addProperty("addedToLibrary");
+			d.addProperty("reportLibraryUuid");
 		}
 		
 		return d;
@@ -93,7 +176,7 @@ public class ReportBuilderReportCompileResource extends DelegatingCrudResource<R
 	public DelegatingResourceDescription getCreatableProperties() {
 		DelegatingResourceDescription d = new DelegatingResourceDescription();
 		d.addRequiredProperty("reportUuid");
-		d.addProperty("reportUuid");
+		d.addRequiredProperty("category"); // Required: for adding to report library
 		return d;
 	}
 	

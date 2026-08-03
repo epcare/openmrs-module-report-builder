@@ -99,15 +99,19 @@ public class LinelistConfigCompilerTest {
 	}
 	
 	@Test
-	public void dropsBuilderOnlyConfigFromParameters() throws Exception {
+	public void preservesFullParameterConfigIncludingBuilderOnlyFields() throws Exception {
 		JsonNode out = compile();
 		JsonNode params = out.path("parameters");
 		Assert.assertEquals(2, params.size());
 		for (JsonNode p : params) {
-			Assert.assertFalse("parameter config must be dropped", p.has("config"));
+			// Config is now preserved for frontend UI rendering
+			Assert.assertTrue("parameter config must be preserved", p.has("config"));
 		}
-		Assert.assertEquals("startDate", params.path(0).path("name").asText());
-		Assert.assertEquals("DATE", params.path(0).path("type").asText());
+		JsonNode startDateParam = params.path(0);
+		Assert.assertEquals("startDate", startDateParam.path("name").asText());
+		Assert.assertEquals("DATE", startDateParam.path("type").asText());
+		Assert.assertEquals("Start Date", startDateParam.path("label").asText());
+		Assert.assertTrue("startDate is required", startDateParam.path("required").asBoolean());
 	}
 	
 	@Test
