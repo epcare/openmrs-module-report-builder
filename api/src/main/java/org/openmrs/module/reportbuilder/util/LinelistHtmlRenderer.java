@@ -139,8 +139,9 @@ public class LinelistHtmlRenderer {
 			return extractColumnDefinitions(config);
 		}
 		
-		// Extract display name mapping from config
+		// Extract display name mapping from config (in config order)
 		Map<String, String> configDisplayNames = new LinkedHashMap<String, String>();
+		List<String> configColumnOrder = new ArrayList<String>();
 		JsonNode dataSetDefinitions = config.path("dataSetDefinitions");
 		if (dataSetDefinitions.isArray()) {
 			for (JsonNode dsd : dataSetDefinitions) {
@@ -151,6 +152,7 @@ public class LinelistHtmlRenderer {
 							String name = col.path("name").asText("");
 							String key = col.has("key") ? col.path("key").asText() : nameToKey(name);
 							configDisplayNames.put(key, name);
+							configColumnOrder.add(key);
 						}
 					}
 					break;
@@ -158,28 +160,33 @@ public class LinelistHtmlRenderer {
 			}
 		}
 		
-		// Extract columns from actual data
+		// Get all column keys from data (including expanded columns)
 		Map<String, Object> firstRow = dataRows.get(0);
-		for (String columnKey : firstRow.keySet()) {
-			String displayName;
-			
-			// Check if we have a display name from config
-			if (configDisplayNames.containsKey(columnKey)) {
-				displayName = configDisplayNames.get(columnKey);
-			} else {
-				// Check if this is an expanded column (base_name_N pattern)
-				String baseKey = findBaseKeyForExpandedColumn(columnKey, configDisplayNames.keySet());
+		Set<String> dataColumnKeys = firstRow.keySet();
+		
+		// Build columns list by iterating through config columns in order
+		// This ensures the primary order is the config's order
+		for (String configKey : configColumnOrder) {
+			if (dataColumnKeys.contains(configKey)) {
+				columns.add(new ColumnDefinition(configKey, configDisplayNames.get(configKey)));
+			}
+		}
+		
+		// Add any expanded columns not in config (e.g., weight_1, weight_2) at the end
+		for (String dataKey : dataColumnKeys) {
+			if (!configDisplayNames.containsKey(dataKey)) {
+				// Check if this is an expanded column
+				String baseKey = findBaseKeyForExpandedColumn(dataKey, configDisplayNames.keySet());
+				String displayName;
 				if (baseKey != null && configDisplayNames.containsKey(baseKey)) {
 					String baseName = configDisplayNames.get(baseKey);
-					int occurrence = getOccurrenceNumber(columnKey);
+					int occurrence = getOccurrenceNumber(dataKey);
 					displayName = baseName + " " + occurrence;
 				} else {
-					// Format the key for display
-					displayName = formatKeyForDisplay(columnKey);
+					displayName = formatKeyForDisplay(dataKey);
 				}
+				columns.add(new ColumnDefinition(dataKey, displayName));
 			}
-			
-			columns.add(new ColumnDefinition(columnKey, displayName));
 		}
 		
 		return columns;

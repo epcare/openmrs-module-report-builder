@@ -232,6 +232,10 @@ public final class LinelistConfigCompiler {
 	 * normalized.
 	 */
 	private static ObjectNode compileColumn(JsonNode col, Map<String, JsonNode> lookup) {
+		// Extract key and metadata to preserve column ordering
+		String key = col.has("key") ? col.path("key").asText() : null;
+		JsonNode metadata = col.has("_metadata") ? col.get("_metadata") : null;
+		
 		JsonNode def = col.path("dataDefinition");
 		String defType = def.path("type").asText("");
 		ObjectNode defConfig = asObjectCopy(def.path("config"));
@@ -243,8 +247,8 @@ public final class LinelistConfigCompiler {
 		
 		// CUSTOM SQL: keep verbatim
 		if (isCustomSql) {
-			return columnWith(col.path("name").asText(""), "SQL", sqlConfig(sql), hasRepeatResolution ? repeatResolution
-			        : null, null);
+			return columnWith(col.path("name").asText(""), key, metadata, "SQL", sqlConfig(sql),
+			    hasRepeatResolution ? repeatResolution : null, null);
 		}
 		
 		// CALCULATION: resolve onDate (true -> ":startDate")
@@ -261,20 +265,20 @@ public final class LinelistConfigCompiler {
 			}
 			cfg.put("onDate", onDate);
 			// CALCULATION columns do not carry repeatResolution in the builder contract.
-			return columnWith(col.path("name").asText(""), "CALCULATION", cfg, null, null);
+			return columnWith(col.path("name").asText(""), key, metadata, "CALCULATION", cfg, null, null);
 		}
 		
 		// IDENTIFIER: force preferred = true
 		if ("IDENTIFIER".equalsIgnoreCase(defType)) {
 			ObjectNode cfg = defConfig.deepCopy();
 			cfg.put("preferred", true);
-			return columnWith(col.path("name").asText(""), "IDENTIFIER", cfg, hasRepeatResolution ? repeatResolution : null,
-			    null);
+			return columnWith(col.path("name").asText(""), key, metadata, "IDENTIFIER", cfg,
+			    hasRepeatResolution ? repeatResolution : null, null);
 		}
 		
 		// PERSON_ATTRIBUTE / PERSON_NAME: keep as-is
 		if ("PERSON_ATTRIBUTE".equalsIgnoreCase(defType) || "PERSON_NAME".equalsIgnoreCase(defType)) {
-			return columnWith(col.path("name").asText(""), defType.toUpperCase(), defConfig.deepCopy(),
+			return columnWith(col.path("name").asText(""), key, metadata, defType.toUpperCase(), defConfig.deepCopy(),
 			    hasRepeatResolution ? repeatResolution : null, null);
 		}
 		
@@ -284,7 +288,8 @@ public final class LinelistConfigCompiler {
 			if (m.find()) {
 				String table = m.group(1);
 				String field = m.group(2);
-				ObjectNode compiled = compileSimpleReference(col.path("name").asText(""), table, field, lookup);
+				ObjectNode compiled = compileSimpleReference(col.path("name").asText(""), table, field, lookup, key,
+				    metadata);
 				if (compiled != null) {
 					if (hasRepeatResolution) {
 						compiled.set("repeatResolution", repeatResolution);
@@ -296,8 +301,8 @@ public final class LinelistConfigCompiler {
 		
 		// Fallback: preserve type (defaulting to SQL) and config
 		String type = defType.isEmpty() ? "SQL" : defType.toUpperCase();
-		return columnWith(col.path("name").asText(""), type, defConfig.deepCopy(), hasRepeatResolution ? repeatResolution
-		        : null, null);
+		return columnWith(col.path("name").asText(""), key, metadata, type, defConfig.deepCopy(),
+		    hasRepeatResolution ? repeatResolution : null, null);
 	}
 	
 	/**
@@ -310,7 +315,7 @@ public final class LinelistConfigCompiler {
 	 * </ul>
 	 */
 	private static ObjectNode compileSimpleReference(String columnName, String table, String field,
-	        Map<String, JsonNode> lookup) {
+	        Map<String, JsonNode> lookup, String key, JsonNode metadata) {
 		String lowerField = field.toLowerCase();
 		
 		if ("person".equals(table)) {
@@ -318,10 +323,10 @@ public final class LinelistConfigCompiler {
 				ObjectNode cfg = MAPPER.createObjectNode();
 				cfg.put("type", "FULL_NAME");
 				cfg.put("preferred", true);
-				return columnWith(columnName, "PERSON_NAME", cfg, null, null);
+				return columnWith(columnName, key, metadata, "PERSON_NAME", cfg, null, null);
 			}
 			if (lowerField.equals("gender") || lowerField.equals("sex")) {
-				return attributeColumn(columnName, "GENDER", null);
+				return attributeColumn(columnName, "GENDER", null, key, metadata);
 			}
 			if (lowerField.contains("birthdate") || lowerField.contains("birth_date")) {
 				ObjectNode converterCfg = MAPPER.createObjectNode();
@@ -329,10 +334,10 @@ public final class LinelistConfigCompiler {
 				ObjectNode converter = MAPPER.createObjectNode();
 				converter.put("type", "BIRTHDATE_AGE");
 				converter.set("config", converterCfg);
-				return attributeColumn(columnName, "BIRTHDATE", converter);
+				return attributeColumn(columnName, "BIRTHDATE", converter, key, metadata);
 			}
 			if (lowerField.contains("death")) {
-				return attributeColumn(columnName, "DEATH_DATE", null);
+				return attributeColumn(columnName, "DEATH_DATE", null, key, metadata);
 			}
 		}
 		
@@ -348,15 +353,15 @@ public final class LinelistConfigCompiler {
 			ObjectNode cfg = MAPPER.createObjectNode();
 			cfg.put("type", "ADDRESS_FIELD");
 			cfg.put("field", addressFieldMap.getOrDefault(lowerField, field));
-			return columnWith(columnName, "PERSON_ADDRESS", cfg, null, null);
+			return columnWith(columnName, key, metadata, "PERSON_ADDRESS", cfg, null, null);
 		}
 		
 		if (table.startsWith("mamba_") || table.startsWith("etl_")) {
-			return etlSubqueryColumn(columnName, table, field, lowerField, lookup);
+			return etlSubqueryColumn(columnName, table, field, lowerField, lookup, key, metadata);
 		}
 		
 		// Unknown table: preserve as a simple SQL reference
-		return columnWith(columnName, "SQL", sqlConfig("`" + table + "`.`" + field + "`"), null, null);
+		return columnWith(columnName, key, metadata, "SQL", sqlConfig("`" + table + "`.`" + field + "`"), null, null);
 	}
 	
 	/**
@@ -365,7 +370,7 @@ public final class LinelistConfigCompiler {
 	 * ordering for date columns.
 	 */
 	private static ObjectNode etlSubqueryColumn(String columnName, String table, String field, String lowerField,
-	        Map<String, JsonNode> lookup) {
+	        Map<String, JsonNode> lookup, String key, JsonNode metadata) {
 		JsonNode colMeta = lookup.get(columnName);
 		boolean isDateColumn = "DATE".equalsIgnoreCase(colMeta.path("type").asText("")) || lowerField.contains("date");
 		
@@ -385,13 +390,14 @@ public final class LinelistConfigCompiler {
 			subquery.append(" LIMIT 1");
 		}
 		
-		return columnWith(columnName, "SQL", sqlConfig(subquery.toString()), null, null);
+		return columnWith(columnName, key, metadata, "SQL", sqlConfig(subquery.toString()), null, null);
 	}
 	
-	private static ObjectNode attributeColumn(String columnName, String attributeType, ObjectNode converter) {
+	private static ObjectNode attributeColumn(String columnName, String attributeType, ObjectNode converter, String key,
+	        JsonNode metadata) {
 		ObjectNode cfg = MAPPER.createObjectNode();
 		cfg.put("type", attributeType);
-		return columnWith(columnName, "PERSON_ATTRIBUTE", cfg, null, converter);
+		return columnWith(columnName, key, metadata, "PERSON_ATTRIBUTE", cfg, null, converter);
 	}
 	
 	private static ObjectNode sqlConfig(String sql) {
@@ -406,8 +412,19 @@ public final class LinelistConfigCompiler {
 	 */
 	private static ObjectNode columnWith(String name, String type, ObjectNode config, JsonNode repeatResolution,
 	        ObjectNode converter) {
+		return columnWith(name, null, null, type, config, repeatResolution, converter);
+	}
+	
+	/**
+	 * Assembles a compiled column node with optional key and metadata for column ordering.
+	 */
+	private static ObjectNode columnWith(String name, String key, JsonNode metadata, String type, ObjectNode config,
+	        JsonNode repeatResolution, ObjectNode converter) {
 		ObjectNode column = MAPPER.createObjectNode();
 		column.put("name", name);
+		if (key != null && !key.trim().isEmpty()) {
+			column.put("key", key);
+		}
 		ObjectNode dataDefinition = MAPPER.createObjectNode();
 		dataDefinition.put("type", type);
 		dataDefinition.set("config", config != null ? config : MAPPER.createObjectNode());
@@ -417,6 +434,9 @@ public final class LinelistConfigCompiler {
 		}
 		if (converter != null) {
 			column.set("converter", converter);
+		}
+		if (metadata != null && metadata.isObject()) {
+			column.set("_metadata", metadata);
 		}
 		return column;
 	}

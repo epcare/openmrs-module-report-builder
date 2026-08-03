@@ -332,6 +332,8 @@ public class LegacyGenericReportSchema {
 		
 		private Converter converter;
 		
+		private Map<String, Object> _metadata;
+		
 		public String getName() {
 			return name;
 		}
@@ -362,6 +364,37 @@ public class LegacyGenericReportSchema {
 		
 		public void setConverter(Converter converter) {
 			this.converter = converter;
+		}
+		
+		public Map<String, Object> get_metadata() {
+			return _metadata;
+		}
+		
+		public void set_metadata(Map<String, Object> _metadata) {
+			this._metadata = _metadata;
+		}
+		
+		/**
+		 * Get the position from metadata for column ordering.
+		 * 
+		 * @return the position value, or null if not set
+		 */
+		public Integer getPosition() {
+			if (_metadata != null && _metadata.containsKey("position")) {
+				Object pos = _metadata.get("position");
+				if (pos instanceof Number) {
+					return ((Number) pos).intValue();
+				}
+				if (pos instanceof String) {
+					try {
+						return Integer.parseInt((String) pos);
+					}
+					catch (NumberFormatException e) {
+						// ignore
+					}
+				}
+			}
+			return null;
 		}
 	}
 	

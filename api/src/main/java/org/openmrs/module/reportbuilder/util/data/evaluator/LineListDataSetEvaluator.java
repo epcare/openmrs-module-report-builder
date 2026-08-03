@@ -341,7 +341,8 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 	}
 	
 	/**
-	 * Build column definitions from the dataset configuration
+	 * Build column definitions from the dataset configuration. Columns are ordered by their
+	 * _metadata.position field if available, otherwise by their original order in the config.
 	 */
 	private Map<String, ColumnDefinition> buildColumnDefinitions(LegacyGenericReportSchema.DataSetDefinition patientDataSet) {
 		Map<String, ColumnDefinition> columns = new LinkedHashMap<String, ColumnDefinition>();
@@ -350,7 +351,29 @@ public class LineListDataSetEvaluator implements DataSetEvaluator {
 			return columns;
 		}
 		
-		for (LegacyGenericReportSchema.Column column : patientDataSet.getColumns()) {
+		// Sort columns by position metadata, preserving original order for columns without position
+		List<LegacyGenericReportSchema.Column> sortedColumns = new ArrayList<LegacyGenericReportSchema.Column>(
+		        Arrays.asList(patientDataSet.getColumns()));
+		Collections.sort(sortedColumns, new java.util.Comparator<LegacyGenericReportSchema.Column>() {
+			
+			@Override
+			public int compare(LegacyGenericReportSchema.Column c1, LegacyGenericReportSchema.Column c2) {
+				Integer pos1 = c1.getPosition();
+				Integer pos2 = c2.getPosition();
+				if (pos1 != null && pos2 != null) {
+					return pos1.compareTo(pos2);
+				}
+				if (pos1 != null) {
+					return -1; // columns with position come first
+				}
+				if (pos2 != null) {
+					return 1; // columns without position come after
+				}
+				return 0; // preserve original order
+			}
+		});
+		
+		for (LegacyGenericReportSchema.Column column : sortedColumns) {
 			String key = column.getKey();
 			if (key == null || key.trim().isEmpty()) {
 				key = column.getName();
