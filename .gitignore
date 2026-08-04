@@ -63,3 +63,7 @@ buildNumber.properties
 .project
 api/.project
 omod/.project
+
+# Project memory and rough work
+MEMORY.md
+roughwork/
