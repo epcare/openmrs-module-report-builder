@@ -6,7 +6,7 @@ import javax.persistence.*;
 
 /**
  * Data Theme A "theme" is a user-friendly domain grouping used by the report builder (e.g.,
- * "OPD Diagnoses", "Lab Tests", "Pharmacy Dispenses"). It provides: - Natural language label &
+ * "OPD Diagnoses", "Lab Tests", "Pharmacy Dispenses"). It provides: - Natural language label &amp;
  * description (BaseOpenmrsMetadata fields) - A stable theme code - A persisted configuration
  * describing the underlying data source (table/view, base alias, joins, default filters, selectable
  * fields, etc.) This is independent of OpenMRS reporting module and aligns with warehouse usage.

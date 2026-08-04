@@ -57,8 +57,9 @@ public class AggregateReportDataSetDefinition extends BaseDataSetDefinition {
 	}
 	
 	/**
-	 * Returns the resolved report design file. Rules: - null -> null - absolute path -> return
-	 * as-is - relative path -> resolve under the configured reportbuilder report designs directory
+	 * Returns the resolved report design file. Rules: - null &gt; null - absolute path &gt; return
+	 * as-is - relative path &gt; resolve under the configured reportbuilder report designs
+	 * directory
 	 */
 	public File getReportDesign() {
 		if (reportDesign == null) {
@@ -101,7 +102,7 @@ public class AggregateReportDataSetDefinition extends BaseDataSetDefinition {
 	/**
 	 * Returns the report designs directory under the configured reportbuilder root. If the global
 	 * property reportbuilder.reports.directory is not set, the fallback path is:
-	 * <OPENMRS_APPDATA>/configuration/reportbuilder/report_designs
+	 * &lt;OPENMRS_APPDATA&gt;/configuration/reportbuilder/report_designs
 	 */
 	public static File getReportDesignDirectory() {
 		AdministrationService administrationService = Context.getAdministrationService();
