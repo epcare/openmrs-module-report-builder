@@ -64,6 +64,9 @@ buildNumber.properties
 api/.project
 omod/.project
 
+# Claude Code settings
+.claude/
+
 # Project memory and rough work
 MEMORY.md
 roughwork/
